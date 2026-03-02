@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aiguard-adversarial"
+version = "0.1.0"
+description = "Adversarial evaluation module for LLM safety and robustness"
+authors = [{ name = "AIGuard", email = "devnull@example.com" }]
+readme = "adversarial/README.md"
+requires-python = ">=3.9"
+dependencies = []
+license = { text = "MIT" }
+
+[project.optional-dependencies]
+huggingface = ["datasets>=2.16.0"]
+
+[tool.setuptools]
+packages = ["adversarial", "adversarial.adapters"]
+include-package-data = true
+
+[tool.setuptools.package-data]
+"adversarial" = ["py.typed"]
