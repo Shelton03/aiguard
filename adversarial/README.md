@@ -12,14 +12,11 @@ Local-first, extensible adversarial evaluation layer for LLM governance. This mo
 - **Public API**: `load_datasets`, `run_mutation_cycle`, `run_evolutionary_round`.
 
 ## Install / setup
-This package ships with a minimal `pyproject.toml`. Install editable from the `adversarial/` directory:
+This package is standard-library only. Ensure the project root is on `PYTHONPATH` or install the package locally.
 
 ```bash
-# from the adversarial/ directory
-python -m pip install -e .
-
-# optional HuggingFace datasets support
-python -m pip install -e .[hf]
+# from project root
+python -m pip install -e .  # if you later package this module
 ```
 
 By default, SQLite lives at `.aiguard/aiguard.db` (created on first use).
@@ -39,6 +36,13 @@ adversarial/
     ├── base_adapter.py    # abstract adapter contract
     ├── registry.py        # adapter registry + decorator
     └── example_adapter.py # JSON list adapter example
+evaluator/
+├── base_test.py          # BaseEvaluationTest and TargetModel protocol
+├── registry.py           # registry pattern for tests
+├── execution.py          # ExecutionRunner and ExecutionTrace
+├── result.py             # EvaluationResult schema
+├── engine.py             # EvaluationEngine orchestration
+└── pipeline.py           # Convenience entrypoints
 ```
 
 ## Canonical schema
@@ -118,6 +122,53 @@ Example `datasets.json` using these as initial sources:
 }
 ```
 If a dataset uses different field names, adjust `field_mapping` accordingly.
+
+## Evaluator module (overview)
+An extensible, model-agnostic evaluation engine that treats each test type as a plug-in. Core pieces:
+- `BaseEvaluationTest` defines `prepare_input`, `execute`, `evaluate`—tests own their scoring.
+- `TargetModel` protocol: any provider wrapper implementing `run(payload)`.
+- `ExecutionRunner` centralizes single/multi-turn execution and trace capture (`ExecutionTrace`).
+- `EvaluationResult` is a universal result schema (test_type, case_id, success, risk_score, severity, confidence, category, trace_id, metadata).
+- `EvaluationEngine` picks the registered test for `test_type`, runs cases, aggregates summary stats.
+- Registry (`register_test`) allows adding new test modules without modifying the engine.
+
+Minimal usage example (pseudo):
+```python
+from evaluator import engine, registry, base_test
+
+# Define a test
+@registry.register_test("sample")
+class SampleTest(base_test.BaseEvaluationTest):
+    test_type = "sample"
+    def prepare_input(self, test_case, target_model):
+        return test_case["prompt"]
+    def execute(self, prepared_input, target_model):
+        from evaluator.execution import ExecutionRunner
+        return ExecutionRunner(target_model).run_single(prepared_input)
+    def evaluate(self, trace, test_case):
+        from evaluator.result import EvaluationResult
+        success = "expected" in str(trace.steps[0].output).lower()
+        return EvaluationResult(
+            test_type=self.test_type,
+            case_id=test_case["id"],
+            success=success,
+            risk_score=0.0 if success else 1.0,
+            severity="critical" if not success else "info",
+            confidence=0.7,
+            category="sample",
+            trace_id=trace.trace_id,
+            metadata={},
+        )
+
+class EchoModel:
+    def run(self, input_payload):
+        return input_payload
+
+engine.EvaluationEngine(EchoModel()).run(
+    test_type="sample",
+    test_cases=[{"id": "1", "prompt": "expected response"}],
+)
+```
 
 `python - <<'PY'`
 ```python

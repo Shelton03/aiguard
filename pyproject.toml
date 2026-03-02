@@ -15,8 +15,9 @@ license = { text = "MIT" }
 [project.optional-dependencies]
 huggingface = ["datasets>=2.16.0"]
 
+
 [tool.setuptools]
-packages = ["adversarial", "adversarial.adapters"]
+packages = ["adversarial", "adversarial.adapters", "evaluator", "hallucination"]
 include-package-data = true
 
 [tool.setuptools.package-data]
