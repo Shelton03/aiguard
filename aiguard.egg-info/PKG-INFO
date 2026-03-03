@@ -1,3 +1,21 @@
+Metadata-Version: 2.4
+Name: aiguard
+Version: 0.2.0
+Summary: AIGuard: model-agnostic safety evaluation toolkit (adversarial, evaluator, hallucination)
+Author-email: AIGuard <devnull@example.com>
+License: MIT
+Keywords: llm,safety,evaluation,robustness,hallucination,adversarial
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+Provides-Extra: huggingface
+Requires-Dist: datasets>=2.16.0; extra == "huggingface"
+
 # AIGuard Adversarial Module
 
 Local-first, extensible adversarial evaluation layer for LLM governance. This module ingests adversarial datasets, normalizes them to a canonical schema, stores them in SQLite, mutates/evolves attacks, and supports multi-turn simulations. No external services or heavyweight infra required.
@@ -5,7 +23,7 @@ Local-first, extensible adversarial evaluation layer for LLM governance. This mo
 ## At a glance
 - **Canonical schema**: Consistent `Attack` contract across ingestion, mutation, storage.
 - **Adapters**: Registry-based dataset loaders (JSON/CSV/HF/etc.) that normalize to the schema.
-- **Storage**: Backend-agnostic via `StorageManager` (SQLite default; optional Docker Postgres), project-scoped, non-destructive.
+- **Storage**: SQLite (`.aiguard/aiguard.db`) with dataset/version tracking and JSON fields.
 - **Mutation engine**: Operator pattern (paraphrase, obfuscation, context wrapping, role reframing).
 - **Evolutionary engine**: Deterministic loop: mutate → score → retain top-K → persist as `evolved`.
 - **Multi-turn support**: Conversation steps and simulator for staged attacks.
@@ -53,15 +71,6 @@ hallucination/
 ├── judge.py
 ├── scoring.py
 └── taxonomy.py
-storage/
-├── manager.py           # StorageManager (single entry point)
-├── base_backend.py      # backend interface
-├── sqlite_backend.py    # default local persistence
-├── postgres_backend.py  # optional Docker-hosted Postgres
-├── models.py            # canonical records (TestCase, Trace, EvaluationResult...)
-├── migrations.py        # backend migration helpers
-├── project.py           # project resolution/sanitization
-└── cli.py               # `aiguard` storage CLI
 ```
 
 ## Canonical schema
@@ -72,78 +81,17 @@ Attack(
     attack_id: str,
     source_dataset: str,
     attack_type: AttackType,           # prompt_injection, jailbreak, pii_exfiltration, policy_override, etc.
-    ## Quickstart
-    Create a dataset config and load, mutate, evolve attacks.
+    subtype: str | None,
+    content: str,
+    severity: str,
+    success_criteria: dict,            # structured pass/fail signals
+    metadata: AttackMetadata,          # dataset_version, multi_turn, language, extra
+    generation_type: GenerationType,   # seed, mutated, evolved, runtime_discovered
+    created_at: datetime,
+)
+```
 
-    `datasets.json`
-    ```json
-    {
-      "datasets": [
-        {"type": "json_list", "path": "data/attacks.json", "name": "my_seeds", "version": "v1"}
-      ]
-    }
-    ```
-    ## Prompt-injection seed datasets (requested)
-    The following HuggingFace datasets can be ingested as seeds via the `huggingface` adapter. Ensure `pip install datasets` first.
-
-    - `r1char9/prompt-2-prompt-injection-v2-dataset`
-    - `imoxto/prompt_injection_hackaprompt_gpt35`
-    - `Guardian0369/Prompt-injection-and-PII`
-
-    Example `datasets.json` using these as initial sources:
-    ```json
-    {
-        "datasets": [
-            {
-                "type": "huggingface",
-                "path": "r1char9/prompt-2-prompt-injection-v2-dataset",
-                "name": "p2p_v2",
-                "version": "v2",
-                "options": {
-                    "split": "train",
-                    "attack_type_value": "prompt_injection",
-                    "field_mapping": {"content": "prompt"}
-                }
-            },
-            {
-                "type": "huggingface",
-                "path": "imoxto/prompt_injection_hackaprompt_gpt35",
-                "name": "hackaprompt_gpt35",
-                "version": "v1",
-                "options": {
-                    "split": "train",
-                    "attack_type_value": "prompt_injection",
-                    "field_mapping": {"content": "prompt"}
-                }
-            },
-            {
-                "type": "huggingface",
-                "path": "Guardian0369/Prompt-injection-and-PII",
-                "name": "prompt_injection_pii",
-                "version": "v1",
-                "options": {
-
-    load_datasets("datasets.json", storage=storage)
-
-    seeds = storage.list_attacks(limit=2)
-    from adversarial.scoring import HeuristicScorer
-
-    config = EvolutionConfig(retain_top_k=5, score_threshold=0.6)
-aiguard init --docker
-
-    print("Seeds:", len(seeds))
-    print("Mutated:", len(mutated))
-    print("Evolved:", len(evolved))
-    PY
-    ```
-
-# List / delete (with confirmation) / export projects
-aiguard project list
-aiguard project delete <project>
-aiguard project export <project> --output export.json
-
-# Migrate between backends (non-destructive)
-aiguard migrate --to postgres
+## Quickstart
 Create a dataset config and load, mutate, evolve attacks.
 
 `datasets.json`

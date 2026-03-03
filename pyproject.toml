@@ -3,22 +3,37 @@ requires = ["setuptools>=61", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "aiguard-adversarial"
-version = "0.1.0"
-description = "Adversarial evaluation module for LLM safety and robustness"
-authors = [{ name = "AIGuard", email = "devnull@example.com" }]
+name = "aiguard"
+version = "0.2.0"
+description = "AIGuard: model-agnostic safety evaluation toolkit (adversarial, evaluator, hallucination)"
+authors = [{ name = "Shelton Mutambirwa", email = "sheltonmutambirwa@gmail.com" }]
 readme = "adversarial/README.md"
 requires-python = ">=3.9"
 dependencies = []
 license = { text = "MIT" }
+keywords = ["llm", "safety", "evaluation", "robustness", "hallucination", "adversarial"]
+classifiers = [
+	"Programming Language :: Python :: 3",
+	"Programming Language :: Python :: 3.9",
+	"Programming Language :: Python :: 3.10",
+	"Programming Language :: Python :: 3.11",
+	"License :: OSI Approved :: MIT License",
+	"Operating System :: OS Independent",
+]
+
+[project.urls]
+Homepage = "https://github.com/Shelton03/aiguard"
+Source = "https://github.com/Shelton03/aiguard"
 
 [project.optional-dependencies]
 huggingface = ["datasets>=2.16.0"]
 
 
 [tool.setuptools]
-packages = ["adversarial", "adversarial.adapters", "evaluator", "hallucination"]
+packages = ["adversarial", "adversarial.adapters", "evaluator", "hallucination", "storage"]
 include-package-data = true
 
 [tool.setuptools.package-data]
 "adversarial" = ["py.typed"]
+"evaluator" = ["py.typed"]
+"hallucination" = ["py.typed"]

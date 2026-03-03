@@ -3,11 +3,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, List, Optional
+from typing import Any, List, Optional, TYPE_CHECKING
 import time
 import uuid
 
-from .base_test import TargetModel
+if TYPE_CHECKING:  # pragma: no cover
+    from .base_test import TargetModel
 
 
 @dataclass
