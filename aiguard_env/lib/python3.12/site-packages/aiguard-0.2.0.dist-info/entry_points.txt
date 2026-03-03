@@ -1,0 +1,2 @@
+[console_scripts]
+aiguard-review = review.cli:main

@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>AIGuard Review — {{ project }}</title>
+  <link rel="stylesheet" href="/static/style.css"/>
+</head>
+<body>
+  <header>
+    <span class="logo">⚙ AIGuard</span>
+    <a class="back" href="/project/{{ project }}/dashboard">← Dashboard</a>
+  </header>
+
+  <main>
+    <h1>Human Review <span class="tag">{{ item.module_type }}</span></h1>
+
+    {% if error %}
+    <div class="alert alert-error">{{ error }}</div>
+    {% endif %}
+
+    <section class="review-meta">
+      <table>
+        <tr><th>Project</th><td>{{ project }}</td></tr>
+        <tr><th>Module</th><td>{{ item.module_type }}</td></tr>
+        <tr><th>Raw Score</th><td>{{ item.raw_score | round(4) }}</td></tr>
+        <tr><th>Calibrated Score</th><td>{{ item.calibrated_score | round(4) }}</td></tr>
+        <tr><th>Trigger</th><td>{{ item.trigger_reason }}</td></tr>
+        <tr><th>Created</th><td>{{ item.created_at.strftime('%Y-%m-%d %H:%M UTC') }}</td></tr>
+      </table>
+    </section>
+
+    <section class="review-response">
+      <h2>Model Response</h2>
+      <pre class="response-box">{{ item.model_response }}</pre>
+    </section>
+
+    <form method="POST" action="/project/{{ project }}/review/{{ token }}">
+      <h2>Your Decision</h2>
+
+      <div class="radio-group">
+        <label class="radio-label">
+          <input type="radio" name="decision" value="correct" required/>
+          ✅ Correct — the model behaved as expected
+        </label>
+        <label class="radio-label">
+          <input type="radio" name="decision" value="incorrect"/>
+          ❌ Incorrect — the model made an error
+        </label>
+        <label class="radio-label">
+          <input type="radio" name="decision" value="uncertain"/>
+          ❓ Uncertain — I cannot determine correctness
+        </label>
+      </div>
+
+      <div class="field">
+        <label for="notes">Notes (optional)</label>
+        <textarea id="notes" name="notes" rows="4"
+                  placeholder="Add context, explain edge case, etc."></textarea>
+      </div>
+
+      <button class="btn btn-primary" type="submit">Submit Review</button>
+    </form>
+  </main>
+
+  <footer>AIGuard v{{ version }}</footer>
+</body>
+</html>

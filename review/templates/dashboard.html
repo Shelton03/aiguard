@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>AIGuard Review — {{ project }} Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css"/>
+</head>
+<body>
+  <header>
+    <span class="logo">⚙ AIGuard</span>
+    <a class="back" href="/">← All Projects</a>
+  </header>
+
+  <main>
+    <h1>{{ project }} <span class="tag">dashboard</span></h1>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-num">{{ pending_count }}</div>
+        <div class="stat-label">Pending</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num">{{ completed_count }}</div>
+        <div class="stat-label">Completed</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num">{{ cal_state.scale_factor | round(4) }}</div>
+        <div class="stat-label">Scale Factor</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num">{{ cal_state.reviews_since_last_calibration }}</div>
+        <div class="stat-label">Reviews Since Calibration</div>
+      </div>
+    </div>
+
+    <h2>Pending Reviews</h2>
+    {% if pending %}
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th><th>Module</th><th>Raw Score</th><th>Calibrated</th><th>Trigger</th><th>Created</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in pending %}
+        <tr>
+          <td class="mono">{{ item.id[:8] }}…</td>
+          <td>{{ item.module_type }}</td>
+          <td>{{ item.raw_score | round(4) }}</td>
+          <td>{{ item.calibrated_score | round(4) }}</td>
+          <td>{{ item.trigger_reason }}</td>
+          <td class="mono">{{ item.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="empty">No pending reviews. ✓</p>
+    {% endif %}
+
+    <h2>Completed Reviews</h2>
+    {% if completed %}
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th><th>Module</th><th>Raw Score</th><th>Calibrated</th><th>Completed At</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in completed %}
+        <tr>
+          <td class="mono">{{ item.id[:8] }}…</td>
+          <td>{{ item.module_type }}</td>
+          <td>{{ item.raw_score | round(4) }}</td>
+          <td>{{ item.calibrated_score | round(4) }}</td>
+          <td class="mono">{{ item.completed_at.strftime('%Y-%m-%d %H:%M') if item.completed_at else '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="empty">No completed reviews yet.</p>
+    {% endif %}
+  </main>
+
+  <footer>
+    Last calibration: {{ cal_state.last_calibration_at.strftime('%Y-%m-%d') }}
+    &nbsp;|&nbsp; AIGuard v{{ version }}
+  </footer>
+</body>
+</html>

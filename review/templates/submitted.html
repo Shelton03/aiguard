@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>AIGuard Review — Submitted</title>
+  <link rel="stylesheet" href="/static/style.css"/>
+</head>
+<body>
+  <header>
+    <span class="logo">⚙ AIGuard</span>
+    <a class="back" href="/project/{{ project }}/dashboard">← Dashboard</a>
+  </header>
+
+  <main class="center">
+    <div class="success-box">
+      <div class="success-icon">✓</div>
+      <h1>Review Submitted</h1>
+      <p>Thank you. Your review has been recorded.</p>
+
+      <table class="summary-table">
+        <tr><th>Project</th><td>{{ project }}</td></tr>
+        <tr><th>Decision</th><td class="decision-{{ label.decision.value }}">{{ label.decision.value | upper }}</td></tr>
+        {% if label.notes %}
+        <tr><th>Notes</th><td>{{ label.notes }}</td></tr>
+        {% endif %}
+        <tr><th>Recorded at</th><td>{{ label.created_at.strftime('%Y-%m-%d %H:%M UTC') }}</td></tr>
+      </table>
+
+      <p class="note">This review link is now expired and cannot be reused.</p>
+      <a class="btn" href="/project/{{ project }}/dashboard">View Dashboard</a>
+    </div>
+  </main>
+
+  <footer>AIGuard v{{ version }}</footer>
+</body>
+</html>

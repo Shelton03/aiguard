@@ -5,6 +5,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+Status = str
+
 
 @dataclass
 class TestCase:
@@ -56,6 +58,30 @@ class ReviewLabel:
     severity: str
     notes: Optional[str]
     created_at: datetime
+
+
+@dataclass
+class ReviewQueueItem:
+    id: str
+    evaluation_id: str
+    project_name: str
+    module_type: str
+    model_response: str
+    raw_score: float
+    calibrated_score: Optional[float]
+    trigger_reason: str
+    status: Status  # pending | completed
+    review_token: str
+    created_at: datetime
+    completed_at: Optional[datetime] = None
+    token_used_at: Optional[datetime] = None
+
+
+@dataclass
+class CalibrationState:
+    project_name: str
+    last_calibration_at: Optional[datetime]
+    reviews_since_last_calibration: int = 0
 
 
 @dataclass

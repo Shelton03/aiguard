@@ -1,0 +1,211 @@
+/* AIGuard Human Review — Minimal stylesheet */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --c-bg:       #f5f6f8;
+  --c-surface:  #ffffff;
+  --c-border:   #dde1e7;
+  --c-text:     #1a1d23;
+  --c-muted:    #6b7280;
+  --c-accent:   #2563eb;
+  --c-warn:     #d97706;
+  --c-ok:       #16a34a;
+  --c-danger:   #dc2626;
+  --radius:     6px;
+  --shadow:     0 1px 4px rgba(0,0,0,.08);
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--c-bg);
+  color: var(--c-text);
+  font-size: 15px;
+  line-height: 1.6;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---- Header ---- */
+header {
+  background: var(--c-surface);
+  border-bottom: 1px solid var(--c-border);
+  padding: 0 32px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.logo { font-weight: 700; font-size: 17px; letter-spacing: -.3px; }
+.tagline { color: var(--c-muted); font-size: 13px; }
+.back { margin-left: auto; color: var(--c-accent); text-decoration: none; font-size: 13px; }
+.back:hover { text-decoration: underline; }
+
+/* ---- Main ---- */
+main {
+  max-width: 900px;
+  width: 100%;
+  margin: 40px auto;
+  padding: 0 24px;
+  flex: 1;
+}
+main.center { display: flex; justify-content: center; align-items: flex-start; }
+
+h1 { font-size: 22px; font-weight: 700; margin-bottom: 20px; }
+h2 { font-size: 16px; font-weight: 600; margin: 28px 0 12px; }
+
+/* ---- Tags / Badges ---- */
+.tag {
+  background: #e0e7ff;
+  color: #3730a3;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  vertical-align: middle;
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.badge-warn { background: #fef3c7; color: var(--c-warn); }
+.badge-ok   { background: #dcfce7; color: var(--c-ok); }
+
+/* ---- Tables ---- */
+table { width: 100%; border-collapse: collapse; background: var(--c-surface); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--c-border); font-size: 14px; }
+thead th { background: #f8f9fb; font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: .4px; color: var(--c-muted); }
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover td { background: #f0f4ff; }
+.mono { font-family: "SF Mono", "Fira Code", monospace; font-size: 12px; color: var(--c-muted); }
+
+/* ---- Buttons ---- */
+.btn {
+  display: inline-block;
+  padding: 7px 16px;
+  border-radius: var(--radius);
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  color: var(--c-text);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background .15s;
+}
+.btn:hover { background: #f0f4ff; border-color: var(--c-accent); }
+.btn-primary {
+  background: var(--c-accent);
+  color: #fff;
+  border-color: var(--c-accent);
+  padding: 10px 24px;
+  font-size: 15px;
+  margin-top: 16px;
+}
+.btn-primary:hover { background: #1d4ed8; border-color: #1d4ed8; }
+
+/* ---- Stats row ---- */
+.stats-row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 8px; }
+.stat-card {
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  padding: 16px 24px;
+  min-width: 140px;
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+.stat-num { font-size: 28px; font-weight: 700; color: var(--c-accent); }
+.stat-label { font-size: 12px; color: var(--c-muted); margin-top: 4px; text-transform: uppercase; letter-spacing: .4px; }
+
+/* ---- Review form ---- */
+.review-meta { margin-bottom: 20px; }
+.review-meta th { font-weight: 600; width: 160px; }
+
+.response-box {
+  background: #1e1e2e;
+  color: #cdd6f4;
+  border-radius: var(--radius);
+  padding: 16px;
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-size: 13px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 320px;
+  overflow-y: auto;
+  line-height: 1.5;
+}
+
+.radio-group { display: flex; flex-direction: column; gap: 10px; margin: 8px 0 20px; }
+.radio-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: border-color .15s;
+}
+.radio-label:has(input:checked) { border-color: var(--c-accent); background: #eff6ff; }
+
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field label { font-weight: 600; font-size: 14px; }
+.field textarea {
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  padding: 10px;
+  font-family: inherit;
+  font-size: 14px;
+  resize: vertical;
+}
+.field textarea:focus { outline: none; border-color: var(--c-accent); }
+
+/* ---- Alerts ---- */
+.alert { padding: 12px 16px; border-radius: var(--radius); margin-bottom: 16px; font-size: 14px; }
+.alert-error { background: #fef2f2; border: 1px solid #fecaca; color: var(--c-danger); }
+
+/* ---- Success box ---- */
+.success-box {
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 40px;
+  text-align: center;
+  max-width: 520px;
+  width: 100%;
+  margin-top: 40px;
+}
+.success-icon { font-size: 48px; color: var(--c-ok); margin-bottom: 16px; }
+.success-box h1 { margin-bottom: 8px; }
+.success-box p { color: var(--c-muted); margin-bottom: 20px; }
+
+.summary-table { text-align: left; margin: 0 auto 20px; }
+.summary-table th { width: 120px; }
+.note { font-size: 12px; color: var(--c-muted); margin: 12px 0 20px; }
+
+.decision-correct  { color: var(--c-ok);     font-weight: 700; }
+.decision-incorrect{ color: var(--c-danger); font-weight: 700; }
+.decision-uncertain{ color: var(--c-warn);   font-weight: 700; }
+
+/* ---- Empty state ---- */
+.empty { color: var(--c-muted); font-style: italic; padding: 12px 0; }
+
+/* ---- Footer ---- */
+footer {
+  background: var(--c-surface);
+  border-top: 1px solid var(--c-border);
+  text-align: center;
+  padding: 12px;
+  font-size: 12px;
+  color: var(--c-muted);
+}

@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>AIGuard Review — Projects</title>
+  <link rel="stylesheet" href="/static/style.css"/>
+</head>
+<body>
+  <header>
+    <span class="logo">⚙ AIGuard</span>
+    <span class="tagline">Human Review Console</span>
+  </header>
+
+  <main>
+    <h1>Projects</h1>
+
+    {% if projects %}
+    <table>
+      <thead>
+        <tr>
+          <th>Project</th>
+          <th>Pending Reviews</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in projects %}
+        <tr>
+          <td><strong>{{ p.name }}</strong></td>
+          <td>
+            {% if p.pending > 0 %}
+              <span class="badge badge-warn">{{ p.pending }}</span>
+            {% else %}
+              <span class="badge badge-ok">0</span>
+            {% endif %}
+          </td>
+          <td><a class="btn" href="/project/{{ p.name }}/dashboard">Open Dashboard →</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="empty">No projects found. Start the review engine from the CLI.</p>
+    {% endif %}
+  </main>
+
+  <footer>AIGuard v{{ version }}</footer>
+</body>
+</html>

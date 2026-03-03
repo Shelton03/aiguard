@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Iterable, List
+from typing import Any, Dict, Iterable, List, Optional
 
 from .models import (
     TestCase,
@@ -10,6 +10,8 @@ from .models import (
     EvaluationResultRecord,
     ReviewLabel,
     DatasetRegistry,
+    ReviewQueueItem,
+    CalibrationState,
 )
 
 
@@ -37,11 +39,35 @@ class BaseBackend(ABC):
         ...
 
     @abstractmethod
+    def save_review_item(self, project: str, item: ReviewQueueItem) -> None:
+        ...
+
+    @abstractmethod
+    def get_review_by_token(self, project: str, token: str) -> Optional[ReviewQueueItem]:
+        ...
+
+    @abstractmethod
+    def list_reviews(self, project: str, status: Optional[str] = None, limit: int = 200) -> List[ReviewQueueItem]:
+        ...
+
+    @abstractmethod
+    def count_reviews(self, project: str, status: Optional[str] = None) -> int:
+        ...
+
+    @abstractmethod
     def get_evaluations(self, project: str, limit: int = 100) -> List[EvaluationResultRecord]:
         ...
 
     @abstractmethod
     def register_dataset(self, project: str, dataset: DatasetRegistry) -> None:
+        ...
+
+    @abstractmethod
+    def save_calibration_state(self, project: str, state: CalibrationState) -> None:
+        ...
+
+    @abstractmethod
+    def get_calibration_state(self, project: str) -> CalibrationState:
         ...
 
     @abstractmethod
