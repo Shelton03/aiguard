@@ -1,3 +1,4 @@
+README.md
 pyproject.toml
 adversarial/README.md
 adversarial/__init__.py
@@ -59,3 +60,4 @@ storage/models.py
 storage/postgres_backend.py
 storage/project.py
 storage/sqlite_backend.py
+tests/test_review.py

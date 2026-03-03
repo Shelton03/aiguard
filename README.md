@@ -1,28 +1,3 @@
-Metadata-Version: 2.4
-Name: aiguard
-Version: 0.2.0
-Summary: AIGuard: model-agnostic safety evaluation toolkit (adversarial, evaluator, hallucination)
-Author-email: Shelton Mutambirwa <sheltonmutambirwa@gmail.com>
-License: MIT
-Project-URL: Homepage, https://github.com/Shelton03/aiguard
-Project-URL: Source, https://github.com/Shelton03/aiguard
-Keywords: llm,safety,evaluation,robustness,hallucination,adversarial
-Classifier: Programming Language :: Python :: 3
-Classifier: Programming Language :: Python :: 3.9
-Classifier: Programming Language :: Python :: 3.10
-Classifier: Programming Language :: Python :: 3.11
-Classifier: License :: OSI Approved :: MIT License
-Classifier: Operating System :: OS Independent
-Requires-Python: >=3.9
-Description-Content-Type: text/markdown
-Provides-Extra: huggingface
-Requires-Dist: datasets>=2.16.0; extra == "huggingface"
-Provides-Extra: review
-Requires-Dist: fastapi>=0.110.0; extra == "review"
-Requires-Dist: uvicorn[standard]>=0.29.0; extra == "review"
-Requires-Dist: jinja2>=3.1.0; extra == "review"
-Requires-Dist: python-multipart>=0.0.9; extra == "review"
-
 # AIGuard
 
 **Model-agnostic LLM safety evaluation toolkit.**

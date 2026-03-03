@@ -7,7 +7,7 @@ name = "aiguard"
 version = "0.2.0"
 description = "AIGuard: model-agnostic safety evaluation toolkit (adversarial, evaluator, hallucination)"
 authors = [{ name = "Shelton Mutambirwa", email = "sheltonmutambirwa@gmail.com" }]
-readme = "adversarial/README.md"
+readme = "README.md"
 requires-python = ">=3.9"
 dependencies = []
 license = { text = "MIT" }

@@ -2,7 +2,7 @@ Metadata-Version: 2.4
 Name: aiguard-adversarial
 Version: 0.1.0
 Summary: Adversarial evaluation module for LLM safety and robustness
-Author-email: AIGuard <devnull@example.com>
+Author-email: sheltonmutambirwa@gmail.com
 License: MIT
 Requires-Python: >=3.9
 Description-Content-Type: text/markdown
