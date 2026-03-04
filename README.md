@@ -3,6 +3,19 @@
 **Model-agnostic LLM safety evaluation toolkit.**
 
 AIGuard is a local-first, modular framework for evaluating, monitoring, and governing large language model behaviour. No external services, no heavyweight infrastructure.
+aiguard/
+├── __init__.py
+├── cli/
+│   ├── main.py              # Typer CLI entrypoint (aiguard)
+│   ├── config.py            # aiguard.yaml loader + project resolution
+│   ├── reporting.py         # JSON report writer
+│   ├── templates.py         # CI template printer
+│   └── services.py          # thin service adapters (no business logic)
+└── evaluation/
+        ├── base.py              # BaseEvaluationModule contract
+        ├── registry.py          # module registry
+        └── modules.py           # built-in module adapters
+```
 
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -41,63 +54,218 @@ pip install -e ".[huggingface]"
 
 ---
 
+## CLI (Orchestration Layer)
+
+The `aiguard` CLI is a thin routing layer that loads project configuration, dispatches
+to module services, and emits CI-friendly JSON reports. It **does not** implement
+scoring, storage, or evaluation logic.
+
+### Command hierarchy
+
+```
+aiguard
+│
+├── project
+│     ├── init
+│     ├── list
+│     ├── delete
+│     └── export
+│
+├── evaluate
+│     ├── adversarial
+│     ├── hallucination
+│     └── (future modules auto-register)
+│
+├── monitor
+│     └── start
+│
+├── review
+│     ├── serve
+│     ├── list
+│     └── calibrate
+│
+├── storage
+│     ├── migrate
+│     └── info
+│
+└── ci
+    └── template
+```
+
+### Project configuration (`aiguard.yaml`)
+
+Each project is configured in a single `aiguard.yaml` file at the project root.
+Thresholds and module settings are locked per-project.
+
+```yaml
+project: econet_llm_eval
+
+model:
+    provider: openai
+    endpoint: https://api.openai.com/v1
+    model_name: gpt-4o
+    api_key_env: OPENAI_API_KEY
+
+evaluation:
+    enabled_modules:
+        - adversarial
+        - hallucination
+    adversarial:
+        threshold: 0.15
+        mode: quick
+        runs_per_test: 3
+        dataset_config: datasets.json
+    hallucination:
+        threshold: 0.35
+        test_cases: []
+```
+
+### Evaluation commands
+
+Run all enabled modules (from `evaluation.enabled_modules`):
+
+```bash
+aiguard evaluate --project econet_llm_eval
+```
+
+Run a single module:
+
+```bash
+aiguard evaluate adversarial --project econet_llm_eval --output report.json
+```
+
+### JSON report format
+
+`--output report.json` writes a CI-friendly artifact. The CLI **does not** mutate
+module output; it simply serializes what the module generates.
+
+Single-module report shape:
+
+```json
+{
+    "project": "econet_llm_eval",
+    "module": "adversarial",
+    "timestamp": "2026-03-04T12:00:00",
+    "total_tests": 120,
+    "failed_tests": 8,
+    "global_risk_score": 0.19,
+    "threshold": 0.15,
+    "status": "fail",
+    "failure_breakdown_by_category": {
+        "prompt_injection": 4,
+        "jailbreak": 4
+    },
+    "top_failing_examples": [
+        {"attack_id": "...", "attack_type": "jailbreak", "avg_score": 0.62}
+    ]
+}
+```
+
+Multi-module report shape:
+
+```json
+{
+    "project": "econet_llm_eval",
+    "timestamp": "2026-03-04T12:00:00",
+    "status": "fail",
+    "modules": [
+        {"module": "adversarial", "status": "fail", "global_risk_score": 0.19},
+        {"module": "hallucination", "status": "pass", "global_risk_score": 0.12}
+    ]
+}
+```
+
+### Exit codes (CI)
+
+* **0** → PASS
+* **1** → FAIL (risk exceeds threshold)
+* **2** → SYSTEM ERROR
+
+For multi-module runs, the CLI exits with:
+
+* **2** if any module returns 2
+* **1** if any module returns 1
+* **0** otherwise
+
+### CI templates
+
+```bash
+aiguard ci template github --project econet_llm_eval
+aiguard ci template gitlab --project econet_llm_eval
+```
+
+The CLI prints a ready-to-copy YAML snippet. It does not modify repo files.
+
+---
+
 ## Directory structure
 
 ```
 aiguard/
-├── adversarial/
-│   ├── __init__.py
-│   ├── schema.py              # canonical Attack schema & enums
-│   ├── storage.py             # SQLite persistence (attack-specific)
-│   ├── seed_manager.py        # seed retrieval / promotion
-│   ├── mutator.py             # mutation operators + engine
-│   ├── evolutionary.py        # evolutionary loop
-│   ├── scoring.py             # pluggable scoring (heuristic)
-│   ├── multi_turn.py          # multi-turn attack representation + simulator
-│   └── adapters/
-│       ├── base_adapter.py
-│       ├── registry.py
-│       └── example_adapter.py
-├── evaluator/
-│   ├── base_test.py           # BaseEvaluationTest + TargetModel protocol
-│   ├── registry.py            # test registry
-│   ├── execution.py           # ExecutionRunner + ExecutionTrace
-│   ├── result.py              # EvaluationResult schema
-│   ├── engine.py              # EvaluationEngine orchestration
-│   └── pipeline.py            # convenience entrypoints
-├── hallucination/
-│   ├── hallucination_test.py  # main entrypoint
-│   ├── modes.py               # execution + hallucination mode detection
-│   ├── ground_truth_checker.py
-│   ├── context_checker.py
-│   ├── consistency_checker.py
-│   ├── uncertainty_estimator.py
-│   ├── judge.py
-│   ├── scoring.py
-│   └── taxonomy.py
-├── storage/
-│   ├── manager.py             # StorageManager — single entry point
-│   ├── base_backend.py        # abstract backend interface
-│   ├── sqlite_backend.py      # default local persistence
-│   ├── postgres_backend.py    # optional Docker-hosted Postgres
-│   ├── models.py              # canonical records (TestCase, Trace, EvaluationResult…)
-│   ├── migrations.py          # backend migration helpers
-│   ├── project.py             # project name resolution
-│   └── cli.py                 # aiguard storage CLI
-├── review/
-│   ├── __init__.py
-│   ├── models.py              # ReviewQueueItem, ReviewLabel, CalibrationState
-│   ├── queue.py               # ReviewQueue (SQLite-backed, single-use tokens)
-│   ├── emailer.py             # SMTP alert emailer
-│   ├── calibration_manager.py # logistic score recalibration
-│   ├── routes.py              # FastAPI route handlers
-│   ├── server.py              # FastAPI app factory
-│   ├── cli.py                 # aiguard-review CLI
-│   ├── templates/             # minimal Jinja2 HTML templates
-│   └── static/                # CSS (no JS frameworks)
-└── tests/
-    ├── test_smoke.py
-    └── test_review.py
+├── __init__.py
+├── cli/
+│   ├── main.py              # Typer CLI entrypoint (aiguard)
+│   ├── config.py            # aiguard.yaml loader + project resolution
+│   ├── reporting.py         # JSON report writer
+│   ├── templates.py         # CI template printer
+│   └── services.py          # thin service adapters (no business logic)
+└── evaluation/
+        ├── base.py              # BaseEvaluationModule contract
+        ├── registry.py          # module registry
+        └── modules.py           # built-in module adapters
+adversarial/
+├── __init__.py
+├── schema.py              # canonical Attack schema & enums
+├── storage.py             # SQLite persistence (attack-specific)
+├── seed_manager.py        # seed retrieval / promotion
+├── mutator.py             # mutation operators + engine
+├── evolutionary.py        # evolutionary loop
+├── scoring.py             # pluggable scoring (heuristic)
+├── multi_turn.py          # multi-turn attack representation + simulator
+└── adapters/
+        ├── base_adapter.py
+        ├── registry.py
+        └── example_adapter.py
+evaluator/
+├── base_test.py           # BaseEvaluationTest + TargetModel protocol
+├── registry.py            # test registry
+├── execution.py           # ExecutionRunner + ExecutionTrace
+├── result.py              # EvaluationResult schema
+├── engine.py              # EvaluationEngine orchestration
+└── pipeline.py            # convenience entrypoints
+hallucination/
+├── hallucination_test.py  # main entrypoint
+├── modes.py               # execution + hallucination mode detection
+├── ground_truth_checker.py
+├── context_checker.py
+├── consistency_checker.py
+├── uncertainty_estimator.py
+├── judge.py
+├── scoring.py
+└── taxonomy.py
+storage/
+├── manager.py             # StorageManager — single entry point
+├── base_backend.py        # abstract backend interface
+├── sqlite_backend.py      # default local persistence
+├── postgres_backend.py    # optional Docker-hosted Postgres
+├── models.py              # canonical records (TestCase, Trace, EvaluationResult…)
+├── migrations.py          # backend migration helpers
+├── project.py             # project name resolution
+└── cli.py                 # aiguard storage CLI
+review/
+├── __init__.py
+├── models.py              # ReviewQueueItem, ReviewLabel, CalibrationState
+├── queue.py               # ReviewQueue (SQLite-backed, single-use tokens)
+├── emailer.py             # SMTP alert emailer
+├── calibration_manager.py # logistic score recalibration
+├── routes.py              # FastAPI route handlers
+├── server.py              # FastAPI app factory
+├── cli.py                 # aiguard-review CLI
+├── templates/             # minimal Jinja2 HTML templates
+└── static/                # CSS (no JS frameworks)
+tests/
+├── smoke_test.py
+└── test_review.py
 ```
 
 ---
@@ -299,7 +467,8 @@ export AIGUARD_PG_DSN="host=localhost port=5432 user=postgres password=postgres"
 aiguard project list
 aiguard project delete <project>
 aiguard project export <project> --output export.json
-aiguard migrate --to postgres
+aiguard storage migrate --to postgres
+aiguard storage info
 ```
 
 ---
