@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
@@ -94,7 +94,7 @@ class AttackStorage:
                 json.dumps(attack.success_criteria),
                 json.dumps(attack.metadata.to_dict()),
                 attack.generation_type.value,
-                datetime.utcnow().isoformat(),
+                datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             )
             for attack in attacks
         ]
@@ -107,6 +107,22 @@ class AttackStorage:
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
                 """,
                 rows,
+            )
+            return conn.total_changes
+
+    def update_generation_type(
+        self, attack_ids: List[str], generation_type: GenerationType
+    ) -> int:
+        """Update the generation_type for a set of existing attacks by ID.
+
+        Returns the number of rows actually updated.
+        """
+        if not attack_ids:
+            return 0
+        with self._connect() as conn:
+            conn.executemany(
+                "UPDATE attacks SET generation_type = ? WHERE attack_id = ?;",
+                [(generation_type.value, aid) for aid in attack_ids],
             )
             return conn.total_changes
 

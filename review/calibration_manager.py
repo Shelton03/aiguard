@@ -160,6 +160,11 @@ class CalibrationManager:
             return True
         return False
 
+    def force_update(self) -> None:
+        """Force recalibration immediately, regardless of thresholds."""
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        self._recalibrate(now)
+
     def _recalibrate(self, now: datetime) -> None:
         """
         Recompute scale_factor based on accumulated review data.

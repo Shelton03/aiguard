@@ -17,8 +17,32 @@ class SeedManager:
         return self.storage.list_attacks(generation_type=GenerationType.SEED, limit=limit)
 
     def promote_to_seed(self, attacks: Iterable[Attack]) -> int:
-        seeded = []
-        for attack in attacks:
-            attack.generation_type = GenerationType.SEED
-            seeded.append(attack)
-        return self.storage.insert_attacks(seeded)
+        """Promote attacks to seed status.
+
+        For attacks already stored, updates their generation_type in-place.
+        For attacks not yet stored, inserts them as seeds.
+        Returns the total number of rows affected (updated + inserted).
+        """
+        attack_list = list(attacks)
+        if not attack_list:
+            return 0
+
+        # Determine which attack_ids already exist in storage.
+        existing_ids = {
+            a.attack_id
+            for a in self.storage.list_attacks()
+        }
+
+        to_update: List[str] = []
+        to_insert: List[Attack] = []
+
+        for attack in attack_list:
+            if attack.attack_id in existing_ids:
+                to_update.append(attack.attack_id)
+            else:
+                attack.generation_type = GenerationType.SEED
+                to_insert.append(attack)
+
+        updated = self.storage.update_generation_type(to_update, GenerationType.SEED)
+        inserted = self.storage.insert_attacks(to_insert) if to_insert else 0
+        return updated + inserted

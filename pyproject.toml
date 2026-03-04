@@ -9,7 +9,10 @@ description = "AIGuard: model-agnostic safety evaluation toolkit (adversarial, e
 authors = [{ name = "Shelton Mutambirwa", email = "sheltonmutambirwa@gmail.com" }]
 readme = "README.md"
 requires-python = ">=3.9"
-dependencies = []
+dependencies = [
+    "typer>=0.12.0",
+    "pyyaml>=6.0",
+]
 license = { text = "MIT" }
 keywords = ["llm", "safety", "evaluation", "robustness", "hallucination", "adversarial"]
 classifiers = [
@@ -35,10 +38,14 @@ review = [
 ]
 
 [project.scripts]
+aiguard = "aiguard.cli.main:app"
 aiguard-review = "review.cli:main"
 
 [tool.setuptools]
 packages = [
+    "aiguard",
+    "aiguard.cli",
+    "aiguard.evaluation",
     "adversarial",
     "adversarial.adapters",
     "evaluator",
