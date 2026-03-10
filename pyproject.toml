@@ -36,6 +36,9 @@ review = [
     "jinja2>=3.1.0",
     "python-multipart>=0.0.9",
 ]
+sdk = [
+    "litellm>=1.0",
+]
 
 [project.scripts]
 aiguard = "aiguard.cli.main:app"
@@ -46,6 +49,7 @@ packages = [
     "aiguard",
     "aiguard.cli",
     "aiguard.evaluation",
+    "aiguard.sdk",
     "adversarial",
     "adversarial.adapters",
     "evaluator",

@@ -21,10 +21,11 @@ AIGuard is a local-first, modular framework for evaluating, monitoring, and gove
 8. [Storage](#8-storage)
 9. [Review](#9-review)
 10. [Tests](#10-tests)
-11. [Extending AIGuard](#11-extending-aiguard)
-12. [Design principles](#12-design-principles)
-13. [Roadmap](#13-roadmap)
-14. [License](#14-license)
+11. [SDK](#11-sdk)
+12. [Extending AIGuard](#12-extending-aiguard)
+13. [Design principles](#13-design-principles)
+14. [Roadmap](#14-roadmap)
+15. [License](#15-license)
 
 ---
 
@@ -269,8 +270,8 @@ aiguard-review serve --port 8123
 
 ```
 .
-├── aiguard/                        # CLI orchestration package
-│   ├── __init__.py
+├── aiguard/                        # CLI orchestration + SDK package
+│   ├── __init__.py                 # exports chat(), configure(), TraceEvent
 │   ├── cli/
 │   │   ├── main.py                 # Typer app — all commands defined here
 │   │   ├── config.py               # aiguard.yaml loader + project name resolution
@@ -278,10 +279,18 @@ aiguard-review serve --port 8123
 │   │   ├── reporting.py            # JSON report writer (no reshaping)
 │   │   ├── templates.py            # GitHub / GitLab YAML printer
 │   │   └── services.py             # thin adapters to existing module APIs
-│   └── evaluation/
-│       ├── base.py                 # BaseEvaluationModule contract
-│       ├── registry.py             # ModuleRegistry (name → class)
-│       └── modules.py              # AdversarialEvaluationModule, HallucinationEvaluationModule
+│   ├── evaluation/
+│   │   ├── base.py                 # BaseEvaluationModule contract
+│   │   ├── registry.py             # ModuleRegistry (name → class)
+│   │   └── modules.py              # AdversarialEvaluationModule, HallucinationEvaluationModule
+│   └── sdk/
+│       ├── __init__.py             # SDK public surface
+│       ├── client.py               # aiguard.chat() — LiteLLM wrapper
+│       ├── trace.py                # TraceEvent + TokenUsage dataclasses
+│       ├── queue.py                # in-memory queue + background daemon worker
+│       ├── dispatcher.py           # dispatch_trace() + handler registry
+│       ├── sampling.py             # should_sample(rate) → bool
+│       └── config.py               # SdkConfig + load_sdk_config()
 │
 ├── adversarial/                    # Adversarial attack pipeline
 │   ├── __init__.py                 # public API: load_datasets, run_mutation_cycle, run_evolutionary_round
@@ -851,7 +860,156 @@ python -m pytest tests/test_review.py -v     # review module (19 tests)
 
 ---
 
-## 11. Extending AIGuard
+## 11. SDK
+
+The SDK is a **thin LiteLLM wrapper** that intercepts LLM calls, captures trace events, and emits them to the monitoring pipeline — all **without blocking the response path**.
+
+### 11.1 Architecture
+
+```
+Application ──► aiguard.chat() ──► litellm.completion() ──► Model Provider
+                     │
+                     │  (after response received, < 1 ms)
+                     ▼
+              TraceEvent created
+                     │
+              enqueue() ──► in-memory queue ──► daemon worker ──► dispatcher
+                                                                       │
+                                                                       ▼
+                                                              monitoring pipeline
+```
+
+The response is returned to the caller **before** the trace is processed.
+
+### 11.2 Install
+
+```bash
+pip install -e ".[sdk]"
+# or
+pip install aiguard litellm
+```
+
+### 11.3 Basic usage
+
+```python
+import aiguard
+
+response = aiguard.chat(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "Explain quantum computing"}],
+)
+print(response.choices[0].message.content)
+```
+
+The response object is the **unmodified** `litellm.ModelResponse` — identical to calling `litellm.completion` directly.
+
+### 11.4 Configuration
+
+The SDK reads `aiguard.yaml` automatically on first call.
+
+```yaml
+# aiguard.yaml
+monitoring:
+  enabled: true
+  sampling_rate: 0.2     # trace ~20% of requests
+
+sdk:
+  provider: litellm
+  queue_maxsize: 10000   # drop events if queue exceeds this
+  worker_timeout_s: 0.1
+```
+
+Override programmatically:
+
+```python
+import aiguard
+
+aiguard.configure(
+    sampling_rate=0.5,
+    enabled=True,
+)
+```
+
+When `monitoring.enabled` is `false` the SDK is a **pure pass-through** — zero overhead, no queue, no worker thread.
+
+### 11.5 Trace event schema
+
+Every sampled call produces one `TraceEvent`:
+
+| Field | Type | Description |
+|---|---|---|
+| `trace_id` | `str` | UUID4 |
+| `timestamp` | `datetime` | UTC time request was initiated |
+| `model` | `str` | Model identifier, e.g. `"gpt-4o"` |
+| `provider` | `str` | Provider layer, e.g. `"litellm"` |
+| `input_messages` | `list[dict]` | Messages sent to the model |
+| `output_text` | `str \| None` | Model reply; `None` on error |
+| `latency_ms` | `float` | Wall-clock round-trip time |
+| `status` | `"ok" \| "error"` | Call outcome |
+| `error` | `str \| None` | Exception type + message on error |
+| `token_usage` | `TokenUsage \| None` | Prompt / completion / total tokens |
+| `metadata` | `dict` | `temperature`, `top_p`, `user_id`, `endpoint_name`, … |
+
+### 11.6 Sampling
+
+```python
+# Trace every request
+aiguard.configure(sampling_rate=1.0)
+
+# Trace 20% of requests
+aiguard.configure(sampling_rate=0.2)
+
+# Disable tracing entirely
+aiguard.configure(sampling_rate=0.0)
+# or
+aiguard.configure(enabled=False)
+```
+
+### 11.7 Custom trace handlers
+
+By default traces are emitted as DEBUG log lines.  Register a handler to forward them to your own back-end:
+
+```python
+from aiguard.sdk.dispatcher import register_handler
+
+def send_to_my_backend(trace_dict: dict) -> None:
+    import requests
+    requests.post("https://ingest.example.com/traces", json=trace_dict, timeout=2)
+
+register_handler(send_to_my_backend)
+```
+
+Enable built-in structured JSON logging (one line per trace at INFO level):
+
+```python
+from aiguard.sdk.dispatcher import enable_json_logging
+enable_json_logging()
+```
+
+### 11.8 Error tracing
+
+If the model call raises an exception, a trace with `status="error"` is still enqueued, then the original exception is re-raised:
+
+```python
+try:
+    response = aiguard.chat(model="gpt-4o", messages=[...])
+except Exception as e:
+    # The trace has already been dispatched with status="error"
+    handle_error(e)
+```
+
+### 11.9 Observability
+
+```python
+from aiguard.sdk.queue import queue_size, dropped_event_count
+
+print(f"Pending traces: {queue_size()}")
+print(f"Dropped events: {dropped_event_count()}")
+```
+
+---
+
+## 12. Extending AIGuard
 
 ### 11.1 Add a new evaluation module
 
@@ -911,7 +1069,7 @@ Pass it to `MutationEngine([..., SynonymMutation()])`.
 
 ---
 
-## 12. Design principles
+## 13. Design principles
 
 - **Local-first** — SQLite by default; no cloud dependency to run evaluations.
 - **Thin CLI** — zero business logic in the CLI; all logic lives in modules.
@@ -922,7 +1080,7 @@ Pass it to `MutationEngine([..., SynonymMutation()])`.
 
 ---
 
-## 13. Roadmap
+## 14. Roadmap
 
 - [ ] Identity-based authentication layer (v2)
 - [ ] Role-based access control
@@ -936,6 +1094,6 @@ Pass it to `MutationEngine([..., SynonymMutation()])`.
 
 ---
 
-## 14. License
+## 15. License
 
 MIT © [Shelton Mutambirwa](https://github.com/Shelton03)
