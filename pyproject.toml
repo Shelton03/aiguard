@@ -3,7 +3,7 @@ requires = ["setuptools>=61", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "aiguard"
+name = "aiguard-safety"
 version = "0.2.0"
 description = "AIGuard: model-agnostic safety evaluation toolkit (adversarial, evaluator, hallucination)"
 authors = [{ name = "Shelton Mutambirwa", email = "sheltonmutambirwa@gmail.com" }]
