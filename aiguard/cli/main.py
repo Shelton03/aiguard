@@ -15,18 +15,20 @@ from .exit_codes import aggregate_exit_codes
 from .reporting import write_report
 from .services import (
     CalibrationService,
-    MonitoringService,
     ProjectService,
     ReviewServer,
     ReviewService,
     StorageService,
 )
+from .monitor_command import monitor_app as _monitor_app_impl
+from .pipeline_command import pipeline_app
+from .dev_command import dev_app
 from .templates import github_template, gitlab_template
 
 app = typer.Typer(help="AIGuard CLI — orchestration for evaluation, monitoring, and review")
 project_app = typer.Typer(help="Project configuration commands")
 evaluate_app = typer.Typer(help="Run evaluation modules")
-monitor_app = typer.Typer(help="Monitoring commands")
+monitor_app = _monitor_app_impl
 review_app = typer.Typer(help="Human review commands")
 storage_app = typer.Typer(help="Storage backend commands")
 ci_app = typer.Typer(help="CI template generator")
@@ -34,6 +36,8 @@ ci_app = typer.Typer(help="CI template generator")
 app.add_typer(project_app, name="project")
 app.add_typer(evaluate_app, name="evaluate")
 app.add_typer(monitor_app, name="monitor")
+app.add_typer(pipeline_app, name="pipeline")
+app.add_typer(dev_app, name="dev")
 app.add_typer(review_app, name="review")
 app.add_typer(storage_app, name="storage")
 app.add_typer(ci_app, name="ci")
@@ -210,14 +214,6 @@ def _register_module_commands() -> None:
 
 
 _register_module_commands()
-
-
-@monitor_app.command("start")
-def monitor_start(project: str) -> None:
-    try:
-        MonitoringService().start(project)
-    except Exception as exc:
-        _handle_error(exc)
 
 
 @review_app.command("serve")

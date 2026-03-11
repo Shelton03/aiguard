@@ -39,6 +39,10 @@ review = [
 sdk = [
     "litellm>=1.0",
 ]
+monitoring = [
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.29.0",
+]
 
 [project.scripts]
 aiguard = "aiguard.cli.main:app"
@@ -56,6 +60,11 @@ packages = [
     "hallucination",
     "storage",
     "review",
+    "pipeline",
+    "monitoring",
+    "monitoring.api",
+    "monitoring.services",
+    "config",
 ]
 include-package-data = true
 

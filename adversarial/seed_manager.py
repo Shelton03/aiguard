@@ -17,7 +17,7 @@ class SeedManager:
         return self.storage.list_attacks(generation_type=GenerationType.SEED, limit=limit)
 
     def promote_to_seed(self, attacks: Iterable[Attack]) -> int:
-         """Promote attacks to seed status.
+        """Promote attacks to seed status.
 
         For attacks already stored, updates their generation_type in-place.
         For attacks not yet stored, inserts them as seeds.
