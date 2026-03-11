@@ -45,15 +45,15 @@ monitoring = [
 ]
 
 [project.scripts]
-aiguard = "aiguard.cli.main:app"
+aiguard = "cli.main:app"
 aiguard-review = "review.cli:main"
 
 [tool.setuptools]
 packages = [
     "aiguard",
-    "aiguard.cli",
-    "aiguard.evaluation",
-    "aiguard.sdk",
+    "cli",
+    "sdk",
+    "evaluation",
     "adversarial",
     "adversarial.adapters",
     "evaluator",

@@ -113,7 +113,7 @@ def _make_consumer(eval_queue: EvaluationQueue, project_id: str):
 def _register_sdk_handler(trace_queue: TraceQueue, config: PipelineConfig) -> None:
     """Register a handler with the SDK dispatcher that feeds the TraceQueue."""
     try:
-        from aiguard.sdk.dispatcher import register_handler  # lazy — SDK is optional
+        from sdk.dispatcher import register_handler  # lazy — SDK is optional
 
         def _sdk_handler(trace_dict: dict) -> None:
             try:
@@ -130,6 +130,6 @@ def _register_sdk_handler(trace_queue: TraceQueue, config: PipelineConfig) -> No
         logger.debug("PipelineRouter: SDK dispatcher handler registered.")
     except ImportError:
         logger.warning(
-            "PipelineRouter: aiguard.sdk not available — SDK traces will not be "
+            "PipelineRouter: sdk not available — SDK traces will not be "
             "forwarded to the evaluation pipeline."
         )
