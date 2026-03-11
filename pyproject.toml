@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aiguard-safety"
-version = "0.5.0"
+version = "0.5.1"
 description = "AIGuard: model-agnostic safety evaluation toolkit (adversarial, evaluator, hallucination)"
 authors = [{ name = "Shelton Mutambirwa", email = "sheltonmutambirwa@gmail.com" }]
 readme = { file = "README.md", content-type = "text/markdown" }
@@ -12,6 +12,7 @@ requires-python = ">=3.10"
 dependencies = [
     "typer>=0.12.0",
     "pyyaml>=6.0",
+    "litellm>=1.0",
 ]
 license = "MIT"
 keywords = ["llm", "safety", "evaluation", "robustness", "hallucination", "adversarial", "ai", "guardrails"]

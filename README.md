@@ -43,20 +43,33 @@ AIGuard is a local-first, modular framework for evaluating, monitoring, and gove
 
 ## 2. Install
 
+### From PyPI (recommended)
+
+```bash
+# Core — includes aiguard.chat(), CLI, adversarial, hallucination, storage
+pip install aiguard-safety
+
+# + Human review server
+pip install "aiguard-safety[review]"
+
+# + Monitoring API
+pip install "aiguard-safety[monitoring]"
+
+# + HuggingFace dataset ingestion
+pip install "aiguard-safety[huggingface]"
+
+# Everything
+pip install "aiguard-safety[monitoring,review,huggingface]"
+```
+
+### From source (development)
+
 ```bash
 git clone https://github.com/Shelton03/aiguard
 cd aiguard
 
 python -m venv .venv && source .venv/bin/activate
-
-# Core (adversarial + evaluator + hallucination + storage)
-pip install -e .
-
-# + Human review server (FastAPI, uvicorn, jinja2)
-pip install -e ".[review]"
-
-# + HuggingFace dataset ingestion
-pip install -e ".[huggingface]"
+pip install -e ".[monitoring,review,huggingface]"
 ```
 
 **Environment variables used at runtime**

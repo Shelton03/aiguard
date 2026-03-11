@@ -267,24 +267,24 @@ Beyond/
 ### 4.1 Install
 
 ```bash
-# Core (CLI + evaluation modules)
-pip install -e .
-
-# With SDK (LiteLLM wrapper)
-pip install -e ".[sdk]"
+# Core (CLI + chat() + evaluation modules) — litellm included
+pip install aiguard-safety
 
 # With monitoring API
-pip install -e ".[monitoring]"
+pip install "aiguard-safety[monitoring]"
 
 # With human review server
-pip install -e ".[review]"
+pip install "aiguard-safety[review]"
 
 # With HuggingFace dataset adapter
-pip install -e ".[huggingface]"
+pip install "aiguard-safety[huggingface]"
 
 # Everything
-pip install -e ".[sdk,monitoring,review,huggingface]"
+pip install "aiguard-safety[monitoring,review,huggingface]"
 ```
+
+> **Note:** `litellm` (required for `aiguard.chat()`) is now a core dependency and is
+> installed automatically. No extra flag needed.
 
 ### 4.2 Initialise a project
 
@@ -1144,7 +1144,7 @@ git clone https://github.com/Shelton03/aiguard
 cd aiguard
 python -m venv aiguard_env
 source aiguard_env/bin/activate
-pip install -e ".[sdk,monitoring,review,huggingface]"
+pip install -e ".[monitoring,review,huggingface]"
 ```
 
 ### Before opening a PR
