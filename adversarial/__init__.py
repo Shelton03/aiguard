@@ -15,6 +15,7 @@ from .schema import Attack, GenerationType
 from .seed_manager import SeedManager
 from .evolutionary import EvolutionaryEngine, EvolutionConfig
 from .scoring import HeuristicScorer
+from .data import builtin_datasets_json, resolve_builtin_path
 
 
 def load_datasets(config_path: str, storage: Optional[AttackStorage] = None) -> int:
@@ -26,6 +27,9 @@ def load_datasets(config_path: str, storage: Optional[AttackStorage] = None) -> 
             {"type": "json_list", "path": "./data.json", "name": "mydata", "version": "v1", "options": {}}
         ]
     }
+
+    The special path prefix ``__builtin__/`` is resolved to the adversarial
+    data directory bundled inside the installed package.
     """
 
     storage = storage or AttackStorage()
@@ -34,7 +38,7 @@ def load_datasets(config_path: str, storage: Optional[AttackStorage] = None) -> 
 
     for dataset_cfg in config.get("datasets", []):
         adapter_type = dataset_cfg["type"]
-        path = dataset_cfg["path"]
+        path = resolve_builtin_path(dataset_cfg["path"])
         name = dataset_cfg.get("name", adapter_type)
         version = dataset_cfg.get("version")
         options = dataset_cfg.get("options", {})

@@ -97,6 +97,17 @@ def project_init(
         _handle_error(exc)
     typer.echo(f"Wrote {output}")
 
+    # Copy the built-in datasets.json into the project so users can extend it.
+    datasets_dest = root / "datasets.json"
+    if not datasets_dest.exists():
+        try:
+            from adversarial.data import builtin_datasets_json
+            import shutil
+            shutil.copy(builtin_datasets_json(), datasets_dest)
+            typer.echo(f"Wrote {datasets_dest}  (built-in adversarial dataset config — edit to add your own datasets)")
+        except Exception:
+            pass  # non-fatal — evaluation falls back to built-in automatically
+
 
 @project_app.command("list")
 def project_list() -> None:

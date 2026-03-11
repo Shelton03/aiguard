@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aiguard-safety"
-version = "0.5.1"
+version = "0.5.2"
 description = "AIGuard: model-agnostic safety evaluation toolkit (adversarial, evaluator, hallucination)"
 authors = [{ name = "Shelton Mutambirwa", email = "sheltonmutambirwa@gmail.com" }]
 readme = { file = "README.md", content-type = "text/markdown" }
@@ -72,7 +72,8 @@ include = [
 exclude = ["aiguard_env*", "tests*", "*.egg-info*"]
 
 [tool.setuptools.package-data]
-"adversarial" = ["py.typed"]
-"evaluator"   = ["py.typed"]
-"hallucination" = ["py.typed"]
-"review"      = ["templates/*.html", "static/*.css"]
+"adversarial"      = ["py.typed", "data/*.json"]
+"adversarial.data" = ["*.json"]
+"evaluator"        = ["py.typed"]
+"hallucination"    = ["py.typed"]
+"review"           = ["templates/*.html", "static/*.css"]

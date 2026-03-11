@@ -8,6 +8,7 @@ from typing import Any, Dict, List
 
 from adversarial import AttackStorage, load_datasets
 from adversarial.scoring import HeuristicScorer
+from adversarial.data import builtin_datasets_json
 from hallucination.hallucination_test import HallucinationTest
 
 from evaluation.base import BaseEvaluationModule
@@ -47,9 +48,10 @@ class AdversarialEvaluationModule(BaseEvaluationModule):
         runs_per_test = int(module_cfg.get("runs_per_test", 3))
         dataset_config = module_cfg.get("dataset_config", "datasets.json")
         dataset_path = Path(self.root_dir) / dataset_config
+
         if not dataset_path.exists():
-            self._error = _ModuleError(f"Dataset config not found: {dataset_path}")
-            return
+            # Fall back to the built-in dataset shipped with the package.
+            dataset_path = builtin_datasets_json()
 
         db_path = Path(self.root_dir) / ".aiguard" / f"{project}.db"
         storage = AttackStorage(db_path=db_path)

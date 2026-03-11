@@ -1,0 +1,11 @@
+{
+  "datasets": [
+    {
+      "type": "json_list",
+      "path": "__builtin__/core_attacks.json",
+      "name": "aiguard-core",
+      "version": "v1",
+      "description": "AIGuard built-in adversarial seed dataset — prompt injection, jailbreaks, PII exfiltration, policy overrides"
+    }
+  ]
+}
