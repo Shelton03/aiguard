@@ -20,7 +20,7 @@ from .data import builtin_datasets_json, resolve_builtin_path
 from .data import DATA_DIR
 
 
-def load_datasets(config_path: str, storage: Optional[AttackStorage] = None) -> int:
+def load_datasets(config_path: Optional[str], storage: Optional[AttackStorage] = None) -> int:
     """Load datasets from a JSON config and persist canonical attacks.
 
     Config format:
@@ -35,6 +35,9 @@ def load_datasets(config_path: str, storage: Optional[AttackStorage] = None) -> 
     """
 
     storage = storage or AttackStorage()
+    if not config_path:
+        # No config provided → load the bundled default dataset
+        return load_default_dataset(storage=storage)
     config = json.loads(Path(config_path).read_text())
     total_inserted = 0
 
@@ -55,13 +58,36 @@ def load_datasets(config_path: str, storage: Optional[AttackStorage] = None) -> 
 def load_default_dataset(storage: Optional[AttackStorage] = None) -> int:
     """Load the bundled default adversarial dataset shipped with the package.
 
-    This reads `adversarial/data/default_adversarial_dataset.jsonl` and inserts
-    Attack objects into storage. Returns number inserted.
+    Prefers ``adversarial/data/default_adversarial_dataset.jsonl`` (generated at
+    build time from 10 HuggingFace sources).  If that file is absent (e.g. an
+    editable / source install without running the build script), falls back to
+    the hand-crafted ``core_attacks.json`` seed dataset.
+
+    Returns the number of attacks inserted.
     """
     storage = storage or AttackStorage()
     data_file = Path(DATA_DIR) / "default_adversarial_dataset.jsonl"
+    fallback = Path(DATA_DIR) / "core_attacks.json"
+
     if not data_file.exists():
-        raise FileNotFoundError(f"Default dataset not found at {data_file}")
+        if fallback.exists():
+            import warnings
+            warnings.warn(
+                "adversarial/data/default_adversarial_dataset.jsonl not found. "
+                "This file is generated at package-build time (python -m build). "
+                "Falling back to the built-in seed dataset (core_attacks.json). "
+                "Run `python adversarial/data/build_default_dataset.py` to generate it locally.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            # Load via the json_list adapter (it handles both JSON array and JSONL)
+            from .adapters.example_adapter import JsonListAdapter
+            adapter = JsonListAdapter(str(fallback), config={"name": "aiguard-core", "version": "builtin"})
+            return storage.insert_attacks(adapter.load())
+        raise FileNotFoundError(
+            f"Default dataset not found at {data_file} and fallback {fallback} is also missing. "
+            "Run `python adversarial/data/build_default_dataset.py` to generate the dataset."
+        )
 
     attacks = []
     with data_file.open("r", encoding="utf-8") as f:

@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+aiguard_env/
+.venv/
+venv/
+env/
+
+# Generated at build time — not stored in git
+adversarial/data/default_adversarial_dataset.jsonl
+
+# IDE
+.vscode/
+.idea/
+
+# macOS
+.DS_Store
+
+# Test / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# SQLite databases
+*.db
+.aiguard/
