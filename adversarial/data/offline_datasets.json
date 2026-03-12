@@ -1,0 +1,11 @@
+{
+  "datasets": [
+    {
+      "type": "json_list",
+      "path": "__builtin__/core_attacks.json",
+      "name": "aiguard-core",
+      "version": "v1",
+      "description": "AIGuard built-in offline seed dataset — 25 hand-crafted adversarial attacks (prompt injection, jailbreaks, PII exfiltration, policy overrides). Use this when the 'datasets' package is not installed or HuggingFace access is unavailable."
+    }
+  ]
+}

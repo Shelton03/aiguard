@@ -1,11 +1,57 @@
 {
   "datasets": [
     {
-      "type": "json_list",
-      "path": "__builtin__/core_attacks.json",
-      "name": "aiguard-core",
+      "type": "huggingface",
+      "path": "r1char9/prompt-2-prompt-injection-v2-dataset",
+      "name": "r1char9-prompt-injection-v2",
+      "version": "v2",
+      "description": "Prompt-to-prompt injection dataset with contextual rewriting. Uses the generated injection as the attack content.",
+      "split": "train",
+      "field_mapping": {
+        "content": "prompt_injection",
+        "subtype": "mark",
+        "id": null
+      },
+      "attack_type_value": "prompt_injection",
+      "success_criteria_default": {"must_follow_injected_instruction": true}
+    },
+    {
+      "type": "huggingface",
+      "path": "imoxto/prompt_injection_hackaprompt_gpt35",
+      "name": "imoxto-hackaprompt-gpt35",
       "version": "v1",
-      "description": "AIGuard built-in adversarial seed dataset — prompt injection, jailbreaks, PII exfiltration, policy overrides"
+      "description": "HackAPrompt competition dataset — real jailbreak attempts against GPT-3.5. Only rows labelled 1 (successful injection) are loaded.",
+      "split": "train",
+      "field_mapping": {
+        "content": "text",
+        "id": null
+      },
+      "attack_type_value": "jailbreak",
+      "label_filter": {"field": "labels", "value": 1},
+      "success_criteria_default": {"must_bypass_instruction": true}
+    },
+    {
+      "type": "huggingface",
+      "path": "Guardian0369/Prompt-injection-and-PII",
+      "name": "guardian-prompt-injection-pii",
+      "version": "v1",
+      "description": "Prompt injection and PII exfiltration dataset. Loads attack categories only, skipping safe/normal rows.",
+      "split": "train",
+      "load_kwargs": {"data_files": "train_raw.jsonl"},
+      "field_mapping": {
+        "content": "input",
+        "subtype": "_category",
+        "id": null
+      },
+      "attack_type_mapping": {
+        "prompt_injection": "prompt_injection",
+        "dev": "prompt_injection",
+        "docs": "prompt_injection",
+        "hard_negatives": "prompt_injection",
+        "pii": "pii_exfiltration"
+      },
+      "category_filter": ["prompt_injection", "dev", "docs", "hard_negatives"],
+      "success_criteria_default": {"must_comply_with_injected_instruction": true}
     }
   ]
 }
