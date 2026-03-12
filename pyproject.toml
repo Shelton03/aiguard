@@ -72,8 +72,8 @@ include = [
 exclude = ["aiguard_env*", "tests*", "*.egg-info*"]
 
 [tool.setuptools.package-data]
-"adversarial"      = ["py.typed", "data/*.json"]
-"adversarial.data" = ["*.json"]
+"adversarial"      = ["py.typed", "data/*.json", "data/*.jsonl"]
+"adversarial.data" = ["*.json", "*.jsonl"]
 "evaluator"        = ["py.typed"]
 "hallucination"    = ["py.typed"]
 "review"           = ["templates/*.html", "static/*.css"]

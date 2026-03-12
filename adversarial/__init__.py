@@ -11,11 +11,13 @@ from .adapters import csv_adapter  # noqa: F401
 from .adapters import huggingface_adapter  # noqa: F401
 from .mutator import DEFAULT_OPERATORS, MutationEngine, MutationOperator
 from .storage import AttackStorage
-from .schema import Attack, GenerationType
+from .schema import Attack, GenerationType, AttackType, AttackMetadata
+from uuid import uuid4
 from .seed_manager import SeedManager
 from .evolutionary import EvolutionaryEngine, EvolutionConfig
 from .scoring import HeuristicScorer
 from .data import builtin_datasets_json, resolve_builtin_path
+from .data import DATA_DIR
 
 
 def load_datasets(config_path: str, storage: Optional[AttackStorage] = None) -> int:
@@ -48,6 +50,52 @@ def load_datasets(config_path: str, storage: Optional[AttackStorage] = None) -> 
         inserted = storage.insert_attacks(adapter.load())
         total_inserted += inserted
     return total_inserted
+
+
+def load_default_dataset(storage: Optional[AttackStorage] = None) -> int:
+    """Load the bundled default adversarial dataset shipped with the package.
+
+    This reads `adversarial/data/default_adversarial_dataset.jsonl` and inserts
+    Attack objects into storage. Returns number inserted.
+    """
+    storage = storage or AttackStorage()
+    data_file = Path(DATA_DIR) / "default_adversarial_dataset.jsonl"
+    if not data_file.exists():
+        raise FileNotFoundError(f"Default dataset not found at {data_file}")
+
+    attacks = []
+    with data_file.open("r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                obj = json.loads(line)
+            except Exception:
+                continue
+            raw_type = obj.get("attack_type", "prompt_injection")
+            try:
+                attack_type = AttackType(raw_type)
+            except Exception:
+                try:
+                    attack_type = AttackType(str(raw_type))
+                except Exception:
+                    attack_type = AttackType.PROMPT_INJECTION
+
+            attacks.append(
+                Attack(
+                    attack_id=str(obj.get("id") or uuid4()),
+                    source_dataset="aiguard-default",
+                    attack_type=attack_type,
+                    subtype=None,
+                    content=obj.get("prompt", ""),
+                    severity="medium",
+                    success_criteria={},
+                    metadata=AttackMetadata(dataset_version="builtin"),
+                    generation_type=GenerationType.SEED,
+                )
+            )
+    return storage.insert_attacks(attacks)
 
 
 def run_mutation_cycle(
