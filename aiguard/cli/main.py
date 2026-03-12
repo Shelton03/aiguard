@@ -8,22 +8,22 @@ from typing import Optional
 
 import typer
 
-from evaluation.registry import module_registry as registry
+from aiguard.evaluation.registry import module_registry as registry
 
-from cli.config import ConfigError, load_project_config, resolve_project_name
-from cli.exit_codes import aggregate_exit_codes
-from cli.reporting import write_report
-from cli.services import (
+from .config import ConfigError, load_project_config, resolve_project_name
+from .exit_codes import aggregate_exit_codes
+from .reporting import write_report
+from .services import (
     CalibrationService,
     ProjectService,
     ReviewServer,
     ReviewService,
     StorageService,
 )
-from cli.monitor_command import monitor_app as _monitor_app_impl
-from cli.pipeline_command import pipeline_app
-from cli.dev_command import dev_app
-from cli.templates import github_template, gitlab_template
+from .monitor_command import monitor_app as _monitor_app_impl
+from .pipeline_command import pipeline_app
+from .dev_command import dev_app
+from .templates import github_template, gitlab_template
 
 app = typer.Typer(help="AIGuard CLI — orchestration for evaluation, monitoring, and review")
 project_app = typer.Typer(help="Project configuration commands")

@@ -6,9 +6,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
-from adversarial import AttackStorage, load_datasets
+from adversarial import AttackStorage, load_datasets, load_default_dataset
 from adversarial.scoring import HeuristicScorer
-from adversarial.data import builtin_datasets_json
 from hallucination.hallucination_test import HallucinationTest
 
 from evaluation.base import BaseEvaluationModule
@@ -46,16 +45,20 @@ class AdversarialEvaluationModule(BaseEvaluationModule):
             return
 
         runs_per_test = int(module_cfg.get("runs_per_test", 3))
-        dataset_config = module_cfg.get("dataset_config", "datasets.json")
-        dataset_path = Path(self.root_dir) / dataset_config
-
-        if not dataset_path.exists():
-            # Fall back to the built-in dataset shipped with the package.
-            dataset_path = builtin_datasets_json()
-
+        dataset_config = module_cfg.get("dataset_config")
         db_path = Path(self.root_dir) / ".aiguard" / f"{project}.db"
         storage = AttackStorage(db_path=db_path)
-        load_datasets(str(dataset_path), storage=storage)
+
+        if dataset_config:
+            dataset_path = Path(self.root_dir) / dataset_config
+            if dataset_path.exists():
+                load_datasets(str(dataset_path), storage=storage)
+            else:
+                # Referenced file doesn't exist — fall back to bundled default
+                load_default_dataset(storage=storage)
+        else:
+            # No dataset_config specified — use bundled default dataset
+            load_default_dataset(storage=storage)
 
         attacks = storage.list_attacks()
         if not attacks:

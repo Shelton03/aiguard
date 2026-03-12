@@ -1,6 +1,6 @@
 # AIGuard — Developer Guide
 
-> **Version 0.5.5** · Python ≥ 3.10 · MIT License  
+> **Version 0.5.6** · Python ≥ 3.10 · MIT License  
 > Package: `aiguard-safety` on PyPI · Repository: <https://github.com/Shelton03/aiguard>
 
 ---
@@ -377,7 +377,7 @@ evaluation:
     threshold: 0.15                  # fail if avg_risk > threshold
     mode: quick                      # quick | thorough
     runs_per_test: 3
-    dataset_config: datasets.json    # relative path
+    # dataset_config: datasets.json  # omit to use the bundled default (~262k attacks)
     quick_limit: 20
   hallucination:
     threshold: 0.25
