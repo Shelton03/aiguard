@@ -32,12 +32,12 @@
     },
     {
       "type": "huggingface",
-      "path": "Guardian0369/Prompt-injection-and-PII",
+      "path": "json",
       "name": "guardian-prompt-injection-pii",
       "version": "v1",
       "description": "Prompt injection and PII exfiltration dataset. Loads attack categories only, skipping safe/normal rows.",
       "split": "train",
-      "load_kwargs": {"data_files": "train_raw.jsonl"},
+      "load_kwargs": {"data_files": "hf://datasets/Guardian0369/Prompt-injection-and-PII/train_raw.jsonl"},
       "field_mapping": {
         "content": "input",
         "subtype": "_category",

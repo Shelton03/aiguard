@@ -1,3 +1,0 @@
-
-[huggingface]
-datasets>=2.16.0
