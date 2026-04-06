@@ -19,6 +19,9 @@ from pathlib import Path
 
 import typer
 
+from config.pipeline_config import load_pipeline_config
+from click.core import ParameterSource
+
 dev_app = typer.Typer(
     name="dev",
     help="Start full development environment (pipeline + API + UI).",
@@ -35,6 +38,12 @@ def dev_start(
     """Start pipeline + monitoring API + React UI dev server."""
     if ctx.invoked_subcommand is not None:
         return
+
+    config = load_pipeline_config()
+    if ctx.get_parameter_source("api_port") == ParameterSource.DEFAULT:
+        api_port = config.api_port
+    if ctx.get_parameter_source("ui_port") == ParameterSource.DEFAULT:
+        ui_port = config.ui_port
 
     typer.echo("✦ AIGuard Dev Environment")
     typer.echo(f"  Dashboard   →  http://localhost:{ui_port}")
@@ -89,13 +98,21 @@ def dev_start(
     ui_dir = Path(__file__).resolve().parents[2] / "monitoring" / "ui"
     if ui_dir.exists() and (ui_dir / "package.json").exists():
         npm_cmd = "npm" if sys.platform != "win32" else "npm.cmd"
+        if not (ui_dir / "node_modules").exists():
+            typer.echo("  [ui] installing dependencies…")
+            try:
+                subprocess.run([npm_cmd, "install"], cwd=str(ui_dir), check=False)
+            except FileNotFoundError:
+                typer.echo("  [ui] npm not found — skipping React dev server", err=True)
+                npm_cmd = None
         try:
-            proc = subprocess.Popen(
-                [npm_cmd, "run", "dev", "--", "--port", str(ui_port)],
-                cwd=str(ui_dir),
-            )
-            procs.append(proc)
-            typer.echo(f"  [ui] dev server starting on port {ui_port}")
+            if npm_cmd:
+                proc = subprocess.Popen(
+                    [npm_cmd, "run", "dev", "--", "--port", str(ui_port)],
+                    cwd=str(ui_dir),
+                )
+                procs.append(proc)
+                typer.echo(f"  [ui] dev server starting on port {ui_port}")
         except FileNotFoundError:
             typer.echo("  [ui] npm not found — skipping React dev server", err=True)
     else:

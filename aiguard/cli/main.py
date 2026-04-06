@@ -83,6 +83,9 @@ monitoring:
     port: 8080
   ui_port: 3000
 
+review:
+    port: 8000
+
 pipeline:
   evaluation_batch_interval_hours: 3
   max_batch_size: 500

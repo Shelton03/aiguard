@@ -14,6 +14,7 @@
 
   <main>
     <h1>{{ project }} <span class="tag">dashboard</span></h1>
+    <p class="subtitle">Queue status and calibration context for this project.</p>
 
     <div class="stats-row">
       <div class="stat-card">
@@ -36,51 +37,59 @@
 
     <h2>Pending Reviews</h2>
     {% if pending %}
-    <table>
-      <thead>
-        <tr>
-          <th>ID</th><th>Module</th><th>Raw Score</th><th>Calibrated</th><th>Trigger</th><th>Created</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for item in pending %}
-        <tr>
-          <td class="mono">{{ item.id[:8] }}…</td>
-          <td>{{ item.module_type }}</td>
-          <td>{{ item.raw_score | round(4) }}</td>
-          <td>{{ item.calibrated_score | round(4) }}</td>
-          <td>{{ item.trigger_reason }}</td>
-          <td class="mono">{{ item.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    <div class="card">
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th><th>Module</th><th>Raw Score</th><th>Calibrated</th><th>Trigger</th><th>Created</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in pending %}
+          <tr>
+            <td class="mono">{{ item.id[:8] }}…</td>
+            <td>{{ item.module_type }}</td>
+            <td>{{ item.raw_score | round(4) }}</td>
+            <td>{{ item.calibrated_score | round(4) }}</td>
+            <td>{{ item.trigger_reason }}</td>
+            <td class="mono">{{ item.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
     {% else %}
-    <p class="empty">No pending reviews. ✓</p>
+    <div class="card">
+      <p class="empty">No pending reviews. ✓</p>
+    </div>
     {% endif %}
 
     <h2>Completed Reviews</h2>
     {% if completed %}
-    <table>
-      <thead>
-        <tr>
-          <th>ID</th><th>Module</th><th>Raw Score</th><th>Calibrated</th><th>Completed At</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for item in completed %}
-        <tr>
-          <td class="mono">{{ item.id[:8] }}…</td>
-          <td>{{ item.module_type }}</td>
-          <td>{{ item.raw_score | round(4) }}</td>
-          <td>{{ item.calibrated_score | round(4) }}</td>
-          <td class="mono">{{ item.completed_at.strftime('%Y-%m-%d %H:%M') if item.completed_at else '—' }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    <div class="card">
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th><th>Module</th><th>Raw Score</th><th>Calibrated</th><th>Completed At</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in completed %}
+          <tr>
+            <td class="mono">{{ item.id[:8] }}…</td>
+            <td>{{ item.module_type }}</td>
+            <td>{{ item.raw_score | round(4) }}</td>
+            <td>{{ item.calibrated_score | round(4) }}</td>
+            <td class="mono">{{ item.completed_at.strftime('%Y-%m-%d %H:%M') if item.completed_at else '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
     {% else %}
-    <p class="empty">No completed reviews yet.</p>
+    <div class="card">
+      <p class="empty">No completed reviews yet.</p>
+    </div>
     {% endif %}
   </main>
 

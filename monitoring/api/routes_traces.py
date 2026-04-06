@@ -3,9 +3,12 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 
+from config.pipeline_config import load_pipeline_config
 from monitoring.services.trace_service import TraceService
+from pipeline.evaluation_worker import EvaluationWorker
+from pipeline.event_models import TraceCreatedEvent
 
 router = APIRouter(prefix="/traces", tags=["traces"])
 
@@ -45,3 +48,44 @@ def get_trace(
     if result is None:
         raise HTTPException(status_code=404, detail=f"Trace '{trace_id}' not found.")
     return result
+
+
+@router.post("/ingest", tags=["traces"], response_model=Dict[str, Any])
+def ingest_trace(
+    payload: Any = Body(..., description="Trace dict or list of trace dicts."),
+) -> Dict[str, Any]:
+    """Ingest one or more traces and run evaluation immediately."""
+    if payload is None:
+        raise HTTPException(status_code=400, detail="Missing trace payload.")
+
+    if isinstance(payload, list):
+        trace_dicts = payload
+    elif isinstance(payload, dict):
+        trace_dicts = [payload]
+    else:
+        raise HTTPException(status_code=400, detail="Payload must be a dict or list.")
+
+    config = load_pipeline_config()
+    worker = EvaluationWorker(config=config)
+
+    events: List[TraceCreatedEvent] = []
+    for trace_dict in trace_dicts:
+        if not isinstance(trace_dict, dict):
+            continue
+        events.append(
+            TraceCreatedEvent.from_trace_dict(
+                trace_dict,
+                project_id=config.project_id,
+            )
+        )
+
+    if not events:
+        raise HTTPException(status_code=400, detail="No valid trace objects provided.")
+
+    evaluated = worker.process_batch(events)
+
+    return {
+        "received": len(events),
+        "evaluated": len(evaluated),
+        "trace_ids": [event.trace_id for event in events],
+    }

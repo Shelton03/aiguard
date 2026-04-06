@@ -35,15 +35,35 @@ export default function TraceTable({ traces = [] }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-gray-100 shadow-sm">
       <table className="min-w-full text-sm">
-        <thead className="bg-gray-50 text-xs uppercase text-gray-500 tracking-wide">
+        <thead className="bg-gray-50 text-[11px] text-gray-500 tracking-wide">
           <tr>
-            {['Trace ID', 'Timestamp', 'Model', 'Latency (ms)', 'Hallucination', 'Adversarial'].map(
-              (h) => (
-                <th key={h} className="text-left px-4 py-3 font-semibold">
-                  {h}
-                </th>
-              )
-            )}
+            <th className="text-left px-4 py-3 font-semibold">Trace ID</th>
+            <th className="text-left px-4 py-3 font-semibold">Timestamp</th>
+            <th className="text-left px-4 py-3 font-semibold">Model</th>
+            <th className="text-left px-4 py-3 font-semibold">
+              <div className="flex flex-col">
+                <span>Latency (ms)</span>
+                <span className="text-[10px] text-gray-400 font-normal">Round-trip time</span>
+              </div>
+            </th>
+            <th className="text-left px-4 py-3 font-semibold">
+              <div className="flex flex-col">
+                <span>Tokens</span>
+                <span className="text-[10px] text-gray-400 font-normal">Total usage</span>
+              </div>
+            </th>
+            <th className="text-left px-4 py-3 font-semibold">
+              <div className="flex flex-col">
+                <span>Hallucination</span>
+                <span className="text-[10px] text-gray-400 font-normal">Correctness risk</span>
+              </div>
+            </th>
+            <th className="text-left px-4 py-3 font-semibold">
+              <div className="flex flex-col">
+                <span>Adversarial</span>
+                <span className="text-[10px] text-gray-400 font-normal">Injection risk</span>
+              </div>
+            </th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-50">
@@ -60,6 +80,9 @@ export default function TraceTable({ traces = [] }) {
               <td className="px-4 py-3 font-medium">{t.model_name || '—'}</td>
               <td className="px-4 py-3 text-right tabular-nums">
                 {t.latency_ms != null ? Number(t.latency_ms).toFixed(0) : '—'}
+              </td>
+              <td className="px-4 py-3 text-right tabular-nums">
+                {t.tokens_used != null ? t.tokens_used : '—'}
               </td>
               <td className="px-4 py-3">
                 <LabelBadge label={t.hallucination_label} />

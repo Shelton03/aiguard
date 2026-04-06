@@ -28,6 +28,19 @@ def _resolve_port(cli_port: int | None) -> int:
         return int(env)
     # Try config file
     root = Path.cwd()
+    yaml_path = root / "aiguard.yaml"
+    if yaml_path.exists():
+        try:
+            import yaml  # type: ignore[import]
+
+            with yaml_path.open() as fh:
+                data = yaml.safe_load(fh) or {}
+            review_section = data.get("review", {}) or {}
+            port = review_section.get("port")
+            if port:
+                return int(port)
+        except Exception:
+            pass
     try:
         import tomllib  # type: ignore
     except ImportError:

@@ -117,6 +117,7 @@ AIGuard can be used in three modes:
 │                                                                  │
 │  FastAPI on :8080                                                │
 │    GET /traces          GET /traces/{id}                        │
+│    POST /traces/ingest                                         │
 │    GET /metrics/hallucination_rate                              │
 │    GET /metrics/adversarial_rate                                │
 │    GET /metrics/model_usage                                     │
@@ -248,7 +249,7 @@ Beyond/
 ├── monitoring/               # Monitoring API + React UI
 │   ├── api/
 │   │   ├── server.py         # create_monitoring_app() FastAPI factory
-│   │   ├── routes_traces.py  # GET /traces, GET /traces/{id}
+│   │   ├── routes_traces.py  # GET /traces, GET /traces/{id}, POST /traces/ingest
 │   │   ├── routes_metrics.py # GET /metrics/*
 │   │   └── routes_review.py  # GET /review/queue*
 │   ├── services/
@@ -329,8 +330,8 @@ aiguard dev
 
 # Or separately:
 aiguard pipeline          # background pipeline only
-aiguard monitor           # monitoring API only (:8080)
-cd monitoring/ui && npm install && npm run dev   # UI only
+aiguard monitor           # monitoring API + UI preview
+aiguard monitor ui         # UI preview only
 ```
 
 ### 4.5 Monitoring UI helper
@@ -339,7 +340,7 @@ cd monitoring/ui && npm install && npm run dev   # UI only
 aiguard monitor ui
 ```
 
-This prints the UI path if it’s available (source install) or shows how to clone the repo and run it.
+The UI preview server runs from the bundled React app. Dependencies are installed and the production bundle is built automatically if needed.
 
 ### 4.6 Wrap LLM calls with the SDK
 
@@ -432,10 +433,16 @@ monitoring:
   enabled: true
   sampling_rate: 1.0                 # 0.0–1.0
   queue_maxsize: 10000
+  ingest_url: http://localhost:8080/traces/ingest
+  ingest_timeout_s: 2.0
   api:
     host: "0.0.0.0"
     port: 8080
   ui_port: 3000
+
+# Review UI
+review:
+  port: 8000
 
 # Pipeline batch evaluation
 pipeline:
@@ -1173,6 +1180,7 @@ uvicorn.run(app, host="0.0.0.0", port=8080)
 |---|---|---|
 | `GET` | `/traces` | List traces (filters: `model`, `limit`, `date_from`, `date_to`, `hallucination_label`, `adversarial_label`) |
 | `GET` | `/traces/{trace_id}` | Single trace with embedded evaluation records |
+| `POST` | `/traces/ingest` | Ingest one trace or a list of trace dicts, evaluate immediately |
 | `GET` | `/metrics/hallucination_rate` | `?window_hours=24` → `{hallucination_rate: float}` |
 | `GET` | `/metrics/adversarial_rate` | `?window_hours=24` → `{adversarial_rate: float}` |
 | `GET` | `/metrics/model_usage` | `{model_usage: {model_name: count}}` |
@@ -1184,6 +1192,16 @@ uvicorn.run(app, host="0.0.0.0", port=8080)
 Interactive docs at `http://localhost:8080/docs`.
 
 #### Monitoring UI
+
+```bash
+# Starts API + UI preview
+aiguard monitor
+
+# UI preview only
+aiguard monitor ui
+```
+
+For source development you can still run the Vite dev server:
 
 ```bash
 cd monitoring/ui
@@ -1249,7 +1267,8 @@ aiguard
     hallucination (same options)
 
   monitor
-    [--host HOST] [--port PORT]          # start monitoring FastAPI server
+    [--host HOST] [--port PORT] [--ui-port PORT]   # start monitoring API + UI preview
+    ui [--port PORT]                                # start UI preview only
 
   pipeline
     [--project PROJECT]                  # start evaluation pipeline (blocking)

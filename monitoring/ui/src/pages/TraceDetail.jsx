@@ -16,11 +16,12 @@ function Badge({ label }) {
   )
 }
 
-function Field({ label, value }) {
+function Field({ label, value, hint }) {
   return (
     <div className="flex flex-col gap-0.5">
       <span className="text-xs text-gray-500 uppercase tracking-wide font-semibold">{label}</span>
       <span className="text-sm text-gray-800 break-words">{value ?? '—'}</span>
+      {hint && <span className="text-[11px] text-gray-400">{hint}</span>}
     </div>
   )
 }
@@ -55,19 +56,32 @@ export default function TraceDetail() {
         ← Back to traces
       </Link>
 
-      <h1 className="text-xl font-bold text-gray-800 font-mono break-all">{trace.id}</h1>
+      <div className="space-y-1">
+        <h1 className="text-xl font-bold text-gray-800 font-mono break-all">{trace.id}</h1>
+        <p className="text-sm text-gray-500">
+          Full trace record including prompt, model response, and evaluation signals.
+        </p>
+      </div>
 
       {/* Core fields */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 grid grid-cols-2 md:grid-cols-3 gap-5">
-        <Field label="Timestamp" value={trace.timestamp && new Date(trace.timestamp).toLocaleString()} />
-        <Field label="Model" value={trace.model_name} />
-        <Field label="Model Version" value={trace.model_version} />
-        <Field label="Latency (ms)" value={trace.latency_ms != null ? Number(trace.latency_ms).toFixed(0) : null} />
-        <Field label="Tokens Used" value={trace.tokens_used} />
-        <Field label="Environment" value={trace.environment} />
+        <Field
+          label="Timestamp"
+          value={trace.timestamp && new Date(trace.timestamp).toLocaleString()}
+          hint="When the request completed (local time)."
+        />
+        <Field label="Model" value={trace.model_name} hint="Provider model identifier." />
+        <Field label="Model Version" value={trace.model_version} hint="Optional version tag." />
+        <Field
+          label="Latency (ms)"
+          value={trace.latency_ms != null ? Number(trace.latency_ms).toFixed(0) : null}
+          hint="Round-trip time for the model call."
+        />
+        <Field label="Tokens Used" value={trace.tokens_used} hint="Total token usage if available." />
+        <Field label="Environment" value={trace.environment} hint="Runtime environment tag." />
       </div>
 
-      {/* Prompt & Response */}
+  {/* Prompt & Response */}
       <div className="grid md:grid-cols-2 gap-4">
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
           <h2 className="text-xs font-semibold text-gray-500 uppercase mb-3">Prompt</h2>
@@ -79,12 +93,27 @@ export default function TraceDetail() {
         </div>
       </div>
 
+      {/* Metadata */}
+      {trace.metadata && Object.keys(trace.metadata).length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+          <h2 className="text-xs font-semibold text-gray-500 uppercase mb-3">Metadata</h2>
+          <pre className="text-xs text-gray-700 whitespace-pre-wrap font-mono">
+            {JSON.stringify(trace.metadata, null, 2)}
+          </pre>
+        </div>
+      )}
+
       {/* Evaluations */}
       {trace.evaluations && trace.evaluations.length > 0 && (
         <div className="space-y-4">
-          <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wide">
-            Evaluation Results
-          </h2>
+          <div>
+            <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wide">
+              Evaluation Results
+            </h2>
+            <p className="text-xs text-gray-500 mt-1">
+              Labels summarize risk signals per module. Scores are normalized to 0–1.
+            </p>
+          </div>
           {trace.evaluations.map((ev) => (
             <div
               key={ev.id}

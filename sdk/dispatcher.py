@@ -24,7 +24,9 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable, Dict, List, Optional
+import urllib.request
+import urllib.error
 
 from sdk.trace import TraceEvent
 
@@ -38,6 +40,7 @@ logger = logging.getLogger(__name__)
 TraceHandler = Callable[[Dict[str, Any]], None]
 
 _handlers: List[TraceHandler] = []
+_http_ingest_handler: Optional[TraceHandler] = None
 
 
 def register_handler(handler: TraceHandler) -> None:
@@ -132,3 +135,38 @@ def enable_json_logging() -> None:
     """
     if _json_log_handler not in _handlers:
         register_handler(_json_log_handler)
+
+
+def _build_http_ingest_handler(url: str, timeout_s: float) -> TraceHandler:
+    def _handler(trace_dict: Dict[str, Any]) -> None:
+        payload = json.dumps(trace_dict).encode("utf-8")
+        req = urllib.request.Request(
+            url=url,
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=timeout_s) as resp:
+                if resp.status >= 400:
+                    logger.warning("AIGuard SDK: ingest returned %s", resp.status)
+        except urllib.error.HTTPError as exc:
+            logger.warning("AIGuard SDK: ingest HTTP error %s", exc.code)
+        except Exception as exc:
+            logger.warning("AIGuard SDK: ingest failed (%s)", exc)
+
+    return _handler
+
+
+def enable_http_ingest(url: str, timeout_s: float = 2.0) -> None:
+    """Register a handler that POSTs traces to the monitoring API.
+
+    This is used for cross-process ingestion when the SDK and pipeline
+    run in separate processes.
+    """
+    global _http_ingest_handler
+    if not url:
+        return
+    if _http_ingest_handler is None:
+        _http_ingest_handler = _build_http_ingest_handler(url, timeout_s)
+        register_handler(_http_ingest_handler)

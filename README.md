@@ -300,20 +300,24 @@ aiguard storage migrate --to postgres
 aiguard-review serve --port 8123
 ```
 
-### 3.8 Monitoring UI helper
+### 3.8 Monitoring UI
 
 ```bash
+# Starts monitoring API + UI preview
+aiguard monitor
+
+# UI only (preview server)
 aiguard monitor ui
 ```
 
-This prints the UI path if it’s available (source install) or shows how to clone the repo and run it.
+The UI preview runs from the bundled React app. When you run `aiguard monitor`, it will install UI dependencies (if needed) and build the preview bundle automatically.
 
 ### 3.9 Running services in production (background)
 
 For long-running services, use a process manager so they survive terminal closes.
 
 ```bash
-nohup aiguard monitor --host 0.0.0.0 --port 8080 > monitor.log 2>&1 &
+nohup aiguard monitor --host 0.0.0.0 --port 8080 --ui-port 3000 > monitor.log 2>&1 &
 nohup aiguard pipeline > pipeline.log 2>&1 &
 nohup aiguard review serve --port 8123 > review.log 2>&1 &
 ```
@@ -966,6 +970,15 @@ The SDK reads `aiguard.yaml` automatically on first call.
 monitoring:
   enabled: true
   sampling_rate: 0.2     # trace ~20% of requests
+  ingest_url: http://localhost:8080/traces/ingest
+  ingest_timeout_s: 2.0
+  api:
+    host: "0.0.0.0"
+    port: 8080
+  ui_port: 3000
+
+review:
+  port: 8000
 
 sdk:
   provider: litellm

@@ -55,6 +55,12 @@ class SdkConfig:
     extra: Dict[str, Any] = field(default_factory=dict)
     """Forward-compatible bucket for future config keys."""
 
+    ingest_url: Optional[str] = None
+    """Monitoring API ingest endpoint for cross-process trace delivery."""
+
+    ingest_timeout_s: float = 2.0
+    """Timeout for HTTP ingest requests in seconds."""
+
     # ------------------------------------------------------------------
     # Validation
     # ------------------------------------------------------------------
@@ -107,6 +113,13 @@ def load_sdk_config(
             raw["queue_maxsize"] = sdk_section.get("queue_maxsize", 10_000)
             raw["worker_timeout_s"] = sdk_section.get("worker_timeout_s", 0.1)
 
+            api_section: Dict[str, Any] = monitoring_section.get("api", {}) or {}
+            api_port = api_section.get("port", 8080)
+            raw["ingest_url"] = monitoring_section.get(
+                "ingest_url", f"http://localhost:{api_port}/traces/ingest"
+            )
+            raw["ingest_timeout_s"] = monitoring_section.get("ingest_timeout_s", 2.0)
+
         except Exception:
             # If the YAML file is malformed / unreadable, fall back to defaults
             # silently so the SDK never crashes on import.
@@ -126,4 +139,6 @@ def load_sdk_config(
         provider=raw.get("provider", _DEFAULT_PROVIDER),
         queue_maxsize=raw.get("queue_maxsize", 10_000),
         worker_timeout_s=raw.get("worker_timeout_s", 0.1),
+        ingest_url=raw.get("ingest_url"),
+        ingest_timeout_s=raw.get("ingest_timeout_s", 2.0),
     )

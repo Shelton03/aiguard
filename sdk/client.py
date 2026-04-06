@@ -38,6 +38,7 @@ from typing import Any, Dict, List, Optional
 
 from sdk.config import SdkConfig, load_sdk_config
 from sdk.queue import configure_queue, enqueue
+from sdk.dispatcher import enable_http_ingest
 from sdk.sampling import should_sample
 from sdk.trace import TokenUsage, TraceEvent
 
@@ -83,6 +84,8 @@ def configure(
         provider=provider,
     )
     configure_queue(_config.queue_maxsize)
+    if _config.ingest_url:
+        enable_http_ingest(_config.ingest_url, _config.ingest_timeout_s)
     logger.debug(
         "AIGuard SDK configured — enabled=%s sampling_rate=%s provider=%s",
         _config.enabled,
@@ -101,6 +104,8 @@ def get_config() -> SdkConfig:
     if _config is None:
         _config = load_sdk_config()
         configure_queue(_config.queue_maxsize)
+        if _config.ingest_url:
+            enable_http_ingest(_config.ingest_url, _config.ingest_timeout_s)
     return _config
 
 
