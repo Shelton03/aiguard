@@ -3,15 +3,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import json
 from pathlib import Path
 from typing import Any, Dict, List
 
 from adversarial import AttackStorage, load_datasets, load_default_dataset
-from adversarial.scoring import HeuristicScorer
+from adversarial.scoring import HeuristicScorer, ResponseHeuristicScorer
 from hallucination.hallucination_test import HallucinationTest
 
 from evaluation.base import BaseEvaluationModule
 from evaluation.registry import module_registry
+from evaluation.model_client import LiteLLMClient, resolve_model_config
 
 
 @dataclass
@@ -46,8 +48,18 @@ class AdversarialEvaluationModule(BaseEvaluationModule):
 
         runs_per_test = int(module_cfg.get("runs_per_test", 3))
         dataset_config = module_cfg.get("dataset_config")
+        use_live_model = bool(module_cfg.get("use_live_model", True))
         db_path = Path(self.root_dir) / ".aiguard" / f"{project}.db"
         storage = AttackStorage(db_path=db_path)
+
+        model_client = None
+        if use_live_model:
+            try:
+                model_cfg = resolve_model_config(self.project_config, self.root_dir)
+                model_client = LiteLLMClient(model_cfg)
+            except ValueError as exc:
+                self._error = _ModuleError(str(exc))
+                return
 
         if dataset_config:
             dataset_path = Path(self.root_dir) / dataset_config
@@ -69,10 +81,22 @@ class AdversarialEvaluationModule(BaseEvaluationModule):
             limit = int(module_cfg.get("quick_limit", 20))
             attacks = attacks[:limit]
 
-        scorer = HeuristicScorer()
+        static_scorer = HeuristicScorer()
+        response_scorer = ResponseHeuristicScorer()
         results: List[Dict[str, Any]] = []
         for attack in attacks:
-            scores = [scorer(attack).score for _ in range(runs_per_test)]
+            response_text = ""
+            rationale = ""
+            if model_client:
+                scores = []
+                for _ in range(runs_per_test):
+                    messages = model_client.build_messages(attack.content)
+                    response_text = model_client.run(messages)
+                    scored = response_scorer.score(attack, response_text)
+                    scores.append(scored.score)
+                    rationale = scored.rationale
+            else:
+                scores = [static_scorer(attack).score for _ in range(runs_per_test)]
             avg_score = sum(scores) / len(scores)
             results.append(
                 {
@@ -81,6 +105,8 @@ class AdversarialEvaluationModule(BaseEvaluationModule):
                     "subtype": attack.subtype,
                     "avg_score": avg_score,
                     "content": attack.content,
+                    "response": response_text,
+                    "rationale": rationale,
                 }
             )
 
@@ -110,6 +136,8 @@ class AdversarialEvaluationModule(BaseEvaluationModule):
                     "subtype": rec["subtype"],
                     "avg_score": round(rec["avg_score"], 6),
                     "content_snippet": _truncate(rec["content"]),
+                    "response_snippet": _truncate(rec.get("response", "")),
+                    "score_rationale": rec.get("rationale", ""),
                 }
                 for rec in top_failing
             ],
@@ -148,6 +176,7 @@ class HallucinationEvaluationModule(BaseEvaluationModule):
         project = self.project_config.get("project", "default")
         threshold = module_cfg.get("threshold")
         test_cases = module_cfg.get("test_cases")
+        use_live_model = bool(module_cfg.get("use_live_model", True))
         if threshold is None:
             self._error = _ModuleError("Missing evaluation.hallucination.threshold in aiguard.yaml")
             return
@@ -155,15 +184,53 @@ class HallucinationEvaluationModule(BaseEvaluationModule):
             self._error = _ModuleError("Missing evaluation.hallucination.test_cases in aiguard.yaml")
             return
 
+        if isinstance(test_cases, str):
+            test_path = Path(self.root_dir) / test_cases
+            if not test_path.exists():
+                self._error = _ModuleError(
+                    f"Hallucination test_cases file not found: {test_path}"
+                )
+                return
+            test_cases = json.loads(test_path.read_text(encoding="utf-8"))
+        if not isinstance(test_cases, list):
+            self._error = _ModuleError("Hallucination test_cases must be a list or JSON file path")
+            return
+
+        model_client = None
+        model_cfg = None
+        if use_live_model:
+            try:
+                model_cfg = resolve_model_config(self.project_config, self.root_dir)
+                model_client = LiteLLMClient(model_cfg)
+            except ValueError as exc:
+                self._error = _ModuleError(str(exc))
+                return
+
         evaluator = HallucinationTest()
         results: List[Dict[str, Any]] = []
         for idx, case in enumerate(test_cases):
+            case_payload = dict(case)
+            if model_client:
+                prompt = case_payload.get("prompt")
+                messages = case_payload.get("messages")
+                if messages:
+                    built_messages = model_client.build_messages("", extra_messages=messages)
+                elif prompt:
+                    built_messages = model_client.build_messages(str(prompt))
+                else:
+                    self._error = _ModuleError(
+                        "Hallucination test case missing 'prompt' or 'messages' for live model evaluation"
+                    )
+                    return
+                response_text = model_client.run(built_messages)
+                case_payload["response"] = response_text
+
             trace = case.get("trace") or module_cfg.get("default_trace") or {
                 "trace_id": case.get("id", f"case-{idx}"),
-                "model": module_cfg.get("model_name", "unknown"),
+                "model": model_cfg.model_name if model_cfg else module_cfg.get("model_name", "unknown"),
                 "metadata": {"execution_mode": "evaluation"},
             }
-            result = evaluator.evaluate(case, trace)
+            result = evaluator.evaluate(case_payload, trace)
             out = result.to_dict()
             risk = out["scores"]["overall_risk"]
             results.append(
@@ -172,6 +239,7 @@ class HallucinationEvaluationModule(BaseEvaluationModule):
                     "category": out["category"],
                     "overall_risk": float(risk),
                     "reasoning": out.get("reasoning", ""),
+                    "response_snippet": _truncate(case_payload.get("response", ""), 200),
                 }
             )
 
@@ -200,6 +268,7 @@ class HallucinationEvaluationModule(BaseEvaluationModule):
                     "category": rec["category"],
                     "overall_risk": round(rec["overall_risk"], 6),
                     "reasoning": _truncate(rec["reasoning"], 200),
+                    "response_snippet": _truncate(rec.get("response_snippet", ""), 200),
                 }
                 for rec in top_failing
             ],
