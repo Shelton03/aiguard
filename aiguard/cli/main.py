@@ -55,8 +55,8 @@ model:
   endpoint: https://api.openai.com/v1
   model_name: gpt-4o
   api_key_env: OPENAI_API_KEY
-    system_prompt: |
-        You are a helpful assistant. Follow policy and refuse unsafe requests.
+    system_prompt_path: prompt_template.py
+    tools_path: tools.py
 
 evaluation:
   enabled_modules:

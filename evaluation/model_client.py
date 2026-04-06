@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+import ast
 import os
 
 from sdk.client import _call_litellm, _extract_output_text
@@ -18,16 +19,50 @@ class ModelConfig:
     system_prompt: Optional[str]
 
 
+def _read_prompt_file(path: Path, var_name: str) -> Optional[str]:
+    if not path.exists():
+        return None
+    if path.suffix == ".py":
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in tree.body:
+                if isinstance(node, ast.Assign):
+                    for target in node.targets:
+                        if isinstance(target, ast.Name) and target.id == var_name:
+                            value = node.value
+                            if isinstance(value, ast.Constant) and isinstance(value.value, str):
+                                return value.value.strip()
+            return None
+        except SyntaxError:
+            return None
+    return path.read_text(encoding="utf-8").strip()
+
+
 def resolve_system_prompt(model_cfg: Dict[str, Any], root_dir: str) -> Optional[str]:
     prompt = model_cfg.get("system_prompt")
     prompt_path = model_cfg.get("system_prompt_path")
+    tools_path = model_cfg.get("tools_path")
+    tools_text: Optional[str] = None
     if prompt_path:
-        path = Path(root_dir) / prompt_path
-        if path.exists():
-            return path.read_text(encoding="utf-8").strip()
+        path = Path(root_dir) / str(prompt_path)
+        prompt_text = _read_prompt_file(path, "PROMPT")
+        if prompt_text:
+            prompt = prompt_text
+    if tools_path:
+        tools_file = Path(root_dir) / str(tools_path)
+        tools_text = _read_prompt_file(tools_file, "TOOLS")
     if isinstance(prompt, str) and prompt.strip():
-        return prompt.strip()
-    return None
+        prompt = prompt.strip()
+    else:
+        prompt = None
+
+    if tools_text:
+        tools_block = f"# Tools\n{tools_text.strip()}"
+        if prompt:
+            return f"{prompt}\n\n{tools_block}"
+        return tools_block
+
+    return prompt
 
 
 def resolve_model_config(project_config: Dict[str, Any], root_dir: str) -> ModelConfig:
