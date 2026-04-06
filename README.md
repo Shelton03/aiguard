@@ -133,6 +133,8 @@ model:
   endpoint: https://api.openai.com/v1
   model_name: gpt-4o
   api_key_env: OPENAI_API_KEY
+  system_prompt_path: prompt_template.py
+  tools_path: tools.py
 
 evaluation:
   enabled_modules:
@@ -144,10 +146,31 @@ evaluation:
     mode: quick            # quick (subset) or full (all attacks)
     runs_per_test: 3       # each attack is scored N times; average is used
     dataset_config: datasets.json
+  use_live_model: true   # call the LLM with system prompt + attack prompts
 
   hallucination:
     threshold: 0.35
     test_cases: []         # list of inline test case dicts (see §7)
+    use_live_model: true   # call the LLM when prompt/messages are provided
+
+# `test_cases` can also be a JSON file path (e.g. hallucination_test_cases.json).
+
+`prompt_template.py` should define a `PROMPT` constant (plain text is also accepted in .txt/.md files):
+
+```python
+PROMPT = """
+You are Econet's support assistant. Follow policy and refuse unsafe requests.
+"""
+```
+
+`tools.py` is optional and should define a `TOOLS` constant if you want to include tool guidance:
+
+```python
+TOOLS = """
+- search(query: str): search internal knowledge base
+- refund(account_id: str): refund a user
+"""
+```
 ```
 
 Scaffold a new config:
