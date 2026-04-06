@@ -333,7 +333,15 @@ aiguard monitor           # monitoring API only (:8080)
 cd monitoring/ui && npm install && npm run dev   # UI only
 ```
 
-### 4.5 Wrap LLM calls with the SDK
+### 4.5 Monitoring UI helper
+
+```bash
+aiguard monitor ui
+```
+
+This prints the UI path if it’s available (source install) or shows how to clone the repo and run it.
+
+### 4.6 Wrap LLM calls with the SDK
 
 ```python
 import aiguard
@@ -349,6 +357,38 @@ response = aiguard.chat(
 print(response.choices[0].message.content)
 # ^ The original litellm response object is returned unmodified.
 # A TraceEvent is queued in the background automatically.
+```
+
+### 4.7 Run services in production (background)
+
+For production deployments, run each service with a process manager so it stays alive after you close the terminal.
+
+**Option A — systemd (Linux):**
+
+```ini
+[Unit]
+Description=AIGuard Monitoring API
+
+[Service]
+ExecStart=/usr/bin/python -m aiguard monitor --host 0.0.0.0 --port 8080
+WorkingDirectory=/srv/aiguard
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Repeat for:
+
+- `aiguard pipeline`
+- `aiguard review serve --port 8123`
+
+**Option B — nohup (quick & simple):**
+
+```bash
+nohup aiguard monitor --host 0.0.0.0 --port 8080 > monitor.log 2>&1 &
+nohup aiguard pipeline > pipeline.log 2>&1 &
+nohup aiguard review serve --port 8123 > review.log 2>&1 &
 ```
 
 ---
@@ -381,7 +421,7 @@ evaluation:
     runs_per_test: 3
     # dataset_config: datasets.json  # omit to use the bundled default (~262k attacks)
     quick_limit: 20
-  use_live_model: true             # call the LLM with system prompt + attack prompts
+    use_live_model: true             # call the LLM with system prompt + attack prompts
   hallucination:
     threshold: 0.25
     test_cases: hallucination_test_cases.json  # required when hallucination module is enabled

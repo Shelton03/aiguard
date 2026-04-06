@@ -28,10 +28,14 @@ def create_monitoring_app(
     """
     app = FastAPI(
         title=title,
-        description="Real-time monitoring, metrics, and review queue for AIGuard.",
-        version="1.0.0",
+        description=(
+            "Monitoring API for AIGuard. Provides trace inspection, evaluation metrics, "
+            "and review-queue endpoints used by the React dashboard."
+        ),
+        version="1.1.0",
         docs_url="/docs",
         redoc_url="/redoc",
+        contact={"name": "AIGuard", "url": "https://github.com/Shelton03/aiguard"},
     )
 
     # CORS — allow the React dev server (port 3000) and any origin by default

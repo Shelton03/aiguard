@@ -146,14 +146,15 @@ evaluation:
     mode: quick            # quick (subset) or full (all attacks)
     runs_per_test: 3       # each attack is scored N times; average is used
     dataset_config: datasets.json
-  use_live_model: true   # call the LLM with system prompt + attack prompts
+    use_live_model: true   # call the LLM with system prompt + attack prompts
 
   hallucination:
     threshold: 0.35
     test_cases: []         # list of inline test case dicts (see §7)
     use_live_model: true   # call the LLM when prompt/messages are provided
+```
 
-# `test_cases` can also be a JSON file path (e.g. hallucination_test_cases.json).
+`test_cases` can also be a JSON file path (e.g. hallucination_test_cases.json).
 
 `prompt_template.py` should define a `PROMPT` constant (plain text is also accepted in .txt/.md files):
 
@@ -170,7 +171,6 @@ TOOLS = """
 - search(query: str): search internal knowledge base
 - refund(account_id: str): refund a user
 """
-```
 ```
 
 Scaffold a new config:
@@ -298,6 +298,24 @@ aiguard storage migrate --to postgres
 
 # Legacy review CLI (still available)
 aiguard-review serve --port 8123
+```
+
+### 3.8 Monitoring UI helper
+
+```bash
+aiguard monitor ui
+```
+
+This prints the UI path if it’s available (source install) or shows how to clone the repo and run it.
+
+### 3.9 Running services in production (background)
+
+For long-running services, use a process manager so they survive terminal closes.
+
+```bash
+nohup aiguard monitor --host 0.0.0.0 --port 8080 > monitor.log 2>&1 &
+nohup aiguard pipeline > pipeline.log 2>&1 &
+nohup aiguard review serve --port 8123 > review.log 2>&1 &
 ```
 
 ---

@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 import json
 from pathlib import Path
 from typing import Any, Dict, List
+import logging
 
 from adversarial import AttackStorage, load_datasets, load_default_dataset
 from adversarial.scoring import HeuristicScorer, ResponseHeuristicScorer
@@ -14,6 +15,8 @@ from hallucination.hallucination_test import HallucinationTest
 from evaluation.base import BaseEvaluationModule
 from evaluation.registry import module_registry
 from evaluation.model_client import LiteLLMClient, resolve_model_config
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -77,14 +80,17 @@ class AdversarialEvaluationModule(BaseEvaluationModule):
             self._error = _ModuleError("No attacks found after dataset load")
             return
 
+        logger.info("Adversarial: loaded %d attacks", len(attacks))
+
         if self.mode == "quick":
             limit = int(module_cfg.get("quick_limit", 20))
             attacks = attacks[:limit]
+            logger.info("Adversarial: quick mode enabled (limit=%d)", limit)
 
         static_scorer = HeuristicScorer()
         response_scorer = ResponseHeuristicScorer()
         results: List[Dict[str, Any]] = []
-        for attack in attacks:
+        for idx, attack in enumerate(attacks, start=1):
             response_text = ""
             rationale = ""
             if model_client:
@@ -109,6 +115,8 @@ class AdversarialEvaluationModule(BaseEvaluationModule):
                     "rationale": rationale,
                 }
             )
+            if idx % 10 == 0 or idx == len(attacks):
+                logger.info("Adversarial: evaluated %d/%d", idx, len(attacks))
 
         total = len(results)
         failed = [r for r in results if r["avg_score"] >= float(threshold)]
@@ -208,7 +216,8 @@ class HallucinationEvaluationModule(BaseEvaluationModule):
 
         evaluator = HallucinationTest()
         results: List[Dict[str, Any]] = []
-        for idx, case in enumerate(test_cases):
+        logger.info("Hallucination: running %d test cases", len(test_cases))
+        for idx, case in enumerate(test_cases, start=1):
             case_payload = dict(case)
             if model_client:
                 prompt = case_payload.get("prompt")
@@ -242,6 +251,8 @@ class HallucinationEvaluationModule(BaseEvaluationModule):
                     "response_snippet": _truncate(case_payload.get("response", ""), 200),
                 }
             )
+            if idx % 10 == 0 or idx == len(test_cases):
+                logger.info("Hallucination: evaluated %d/%d", idx, len(test_cases))
 
         total = len(results)
         failed = [r for r in results if r["overall_risk"] >= float(threshold)]

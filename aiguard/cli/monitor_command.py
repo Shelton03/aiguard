@@ -49,7 +49,7 @@ def monitor_start(
 @monitor_app.command("ui")
 def monitor_ui() -> None:
     """Print instructions for starting the Monitoring UI."""
-    root = Path(__file__).resolve().parents[1]
+    root = Path(__file__).resolve().parents[2]
     ui_dir = root / "monitoring" / "ui"
     if ui_dir.exists() and (ui_dir / "package.json").exists():
         typer.echo("Monitoring UI source detected.")

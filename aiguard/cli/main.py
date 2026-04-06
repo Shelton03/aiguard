@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -96,9 +97,12 @@ storage: sqlite
 def _run_module(module_name: str, config: dict, mode: str, root: Path):
     module_cls = registry.get(module_name)
     module = module_cls(config, mode, str(root))
+    typer.echo(f"→ Running {module_name} ({mode})")
     module.run()
     report = module.generate_report()
     exit_code = module.exit_code()
+    status = report.get("status", "unknown")
+    typer.echo(f"✓ {module_name} complete (status={status})")
     return report, exit_code
 
 
@@ -176,6 +180,8 @@ def evaluate_all(
     if ctx.invoked_subcommand is not None:
         return
 
+    logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
+
     root = Path.cwd()
     try:
         config = load_project_config(root, project)
@@ -218,6 +224,7 @@ def _register_module_command(module_name: str) -> None:
         output: Optional[Path] = typer.Option(None, "--output", help="Write JSON report"),
         mode: str = typer.Option("quick", "--mode", help="Evaluation mode"),
     ) -> None:
+        logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
         root = Path.cwd()
         try:
             config = load_project_config(root, project)
