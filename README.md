@@ -703,14 +703,29 @@ print(result.to_dict())
     "uncertainty_score": 0.42,
     "overall_risk": 0.22
   },
-  "category": "unsupported_claim",
+  "category": "faithfulness/context_inconsistency",
   "confidence": 0.7,
   "reasoning": "support=0.80, contradiction=0.05 | hedges=1, overconf=0",
-  "metadata": {"trace_id": "t1", "model": "my-llm", "mode": "context_grounded"}
+  "metadata": {
+    "trace_id": "t1",
+    "model": "my-llm",
+    "mode": "context_grounded",
+    "taxonomy": {"family": "faithfulness", "subtype": "context_inconsistency", "source": "unknown"}
+  }
 }
 ```
 
-### 7.4 Inline test cases for CI (`aiguard.yaml`)
+### 7.4 Taxonomy
+
+Hallucinations are classified into **factuality** (real‑world mismatch) and **faithfulness** (prompt/context mismatch).
+The `category` field encodes both, e.g. `factuality/factual_contradiction` or `faithfulness/context_inconsistency`.
+
+### 7.5 Judge layer (local)
+
+For full judge reasoning, point `judge.endpoint` to a locally hosted model (Ollama/vLLM/LM Studio). The judge runs in
+batch evaluation only and never sends data off-box.
+
+### 7.6 Inline test cases for CI (`aiguard.yaml`)
 
 ```yaml
 evaluation:
@@ -980,11 +995,25 @@ monitoring:
 review:
   port: 8000
 
+judge:
+  enabled: false
+  provider: local
+  # Ollama: http://localhost:11434/v1
+  # vLLM:   http://localhost:8000/v1
+  # LM Studio: http://localhost:1234/v1
+  endpoint: http://localhost:11434/v1
+  model: llama3.1:8b
+  timeout_s: 8.0
+  max_tokens: 256
+  temperature: 0.0
+
 sdk:
   provider: litellm
   queue_maxsize: 10000   # drop events if queue exceeds this
   worker_timeout_s: 0.1
 ```
+
+For full judge reasoning, run a **locally hosted** model (Ollama/vLLM/LM Studio) and point `judge.endpoint` to it. This keeps all trace data on your machine.
 
 Override programmatically:
 

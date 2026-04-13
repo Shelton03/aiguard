@@ -444,6 +444,16 @@ monitoring:
 review:
   port: 8000
 
+# Local judge (Ollama/vLLM/LM Studio)
+judge:
+  enabled: false
+  provider: local
+  endpoint: http://localhost:11434/v1
+  model: llama3.1:8b
+  timeout_s: 8.0
+  max_tokens: 256
+  temperature: 0.0
+
 # Pipeline batch evaluation
 pipeline:
   evaluation_batch_interval_hours: 3
@@ -456,6 +466,8 @@ pipeline:
 storage: sqlite                      # sqlite | postgres
 postgres_dsn: "host=localhost port=5432 user=postgres password=secret"
 ```
+
+For full judge reasoning, keep the judge model local and point `judge.endpoint` to your local server.
 
 **Hallucination test cases** (required when `hallucination` is enabled):
 
@@ -858,6 +870,31 @@ Multi-mode factuality and grounding scorer. Automatically selects its evaluation
 | `HallucinationResult.confidence` | Evaluator confidence in `[0,1]` |
 | `HallucinationResult.reasoning` | Free-text explanation |
 
+#### Taxonomy (granular)
+
+The hallucination classifier emits a granular taxonomy string in `HallucinationResult.category` and a structured
+taxonomy map in `HallucinationResult.metadata["taxonomy"]`.
+
+**Factuality hallucinations** (real-world consistency):
+- `factuality/factual_contradiction`
+- `factuality/entity_error`
+- `factuality/relation_error`
+- `factuality/factual_fabrication`
+- `factuality/unverifiable`
+- `factuality/overclaim`
+
+**Faithfulness hallucinations** (prompt/context adherence):
+- `faithfulness/instruction_inconsistency`
+- `faithfulness/context_inconsistency`
+- `faithfulness/logical_inconsistency`
+
+**Intrinsic vs extrinsic** is recorded in `metadata.taxonomy.source` as `intrinsic`, `extrinsic`, or `unknown`.
+
+#### Judge layer (local)
+
+For full judge reasoning, configure a **local** OpenAI-compatible endpoint (Ollama, vLLM, LM Studio) and set
+`judge.enabled: true`. The judge runs only in batch evaluation paths to keep latency low and data local.
+
 #### Minimal example
 
 ```python
@@ -1246,6 +1283,7 @@ config = load_pipeline_config(
 | `api_host` | `"0.0.0.0"` | Monitoring API bind host |
 | `api_port` | `8080` | Monitoring API port |
 | `ui_port` | `3000` | React dev server port |
+| `judge` | `JudgeConfig()` | Local LLM judge configuration |
 
 ---
 

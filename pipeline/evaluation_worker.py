@@ -134,7 +134,10 @@ class EvaluationWorker:
         from hallucination.hallucination_test import HallucinationTest  # lazy
 
         if self._hallucination_test is None:
-            self._hallucination_test = HallucinationTest(enable_judge=False)
+            self._hallucination_test = HallucinationTest(
+                enable_judge=bool(self._config.judge.enabled),
+                judge_config=self._config.judge,
+            )
 
         prompt = _prompt_from_messages(event.input_messages)
         test_case = {
@@ -180,6 +183,16 @@ class EvaluationWorker:
             "forget everything",
         ]
         hits = [p for p in injection_patterns if p in prompt]
+        subtype_map = {
+            "ignore previous instructions": "instruction_override",
+            "ignore all previous": "instruction_override",
+            "disregard your instructions": "instruction_override",
+            "you are now": "roleplay_override",
+            "new instructions:": "instruction_override",
+            "system prompt:": "system_prompt_exfiltration",
+            "forget everything": "instruction_override",
+        }
+        subtypes = sorted({subtype_map.get(hit, "instruction_override") for hit in hits})
         score = min(1.0, len(hits) * 0.35)
         label = "injection_detected" if score > 0.0 else "safe"
         explanation = (
@@ -192,7 +205,12 @@ class EvaluationWorker:
             score=score,
             confidence=0.75 if hits else 0.90,
             explanation=explanation,
-            raw={"patterns_found": hits, "score": score},
+            raw={
+                "patterns_found": hits,
+                "score": score,
+                "category": "prompt_injection" if hits else "safe",
+                "subtypes": subtypes,
+            },
         )
 
     # ---- Persistence -------------------------------------------------

@@ -17,7 +17,7 @@ def evaluate_against_ground_truth(response: str, ground_truth: str) -> tuple[Sco
 
     match = truth_l in response_l
     score = 1.0 if match else 0.0
-    category = HallucinationCategory.UNKNOWN if match else HallucinationCategory.FACTUAL_MISMATCH
+    category = HallucinationCategory.UNKNOWN if match else HallucinationCategory.FACTUAL_CONTRADICTION
     bundle = ScoreBundle(factual_score=score, grounding_score=None, consistency_score=None, uncertainty_score=None, overall_risk=clamp(1 - score), confidence=0.6 if match else 0.4)
     reasoning = "Ground truth substring match" if match else "Response does not align with provided ground truth"
     return bundle, category.value + ": " + reasoning

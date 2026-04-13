@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from config.judge_config import JudgeConfig, load_judge_config
+
 
 @dataclass
 class PipelineConfig:
@@ -36,6 +38,9 @@ class PipelineConfig:
     project_id: str = ""
     """If non-empty, only traces with this project_id are evaluated."""
 
+    # LLM judge configuration (local endpoint)
+    judge: JudgeConfig = field(default_factory=JudgeConfig)
+
     extra: Dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -54,6 +59,7 @@ def load_pipeline_config(
     Explicit *overrides* take the highest priority.
     """
     raw: Dict[str, Any] = {}
+    judge_config = load_judge_config(root)
 
     config_path = (root or Path(os.getcwd())) / "aiguard.yaml"
     if config_path.exists():
@@ -83,6 +89,18 @@ def load_pipeline_config(
             raw["api_port"] = api_section.get("port", 8080)
             raw["ui_port"] = monitoring_section.get("ui_port", 3000)
 
+            judge_section: Dict[str, Any] = doc.get("judge", {}) or {}
+            judge_config = JudgeConfig(
+                enabled=bool(judge_section.get("enabled", judge_config.enabled)),
+                provider=str(judge_section.get("provider", judge_config.provider)),
+                endpoint=str(judge_section.get("endpoint", judge_config.endpoint)),
+                model=str(judge_section.get("model", judge_config.model)),
+                api_key_env=judge_section.get("api_key_env", judge_config.api_key_env),
+                timeout_s=float(judge_section.get("timeout_s", judge_config.timeout_s)),
+                max_tokens=int(judge_section.get("max_tokens", judge_config.max_tokens)),
+                temperature=float(judge_section.get("temperature", judge_config.temperature)),
+            )
+
         except Exception:
             # Malformed YAML — fall back to defaults silently
             pass
@@ -98,4 +116,5 @@ def load_pipeline_config(
         api_host=raw.get("api_host", "0.0.0.0"),
         api_port=raw.get("api_port", 8080),
         ui_port=raw.get("ui_port", 3000),
+        judge=judge_config,
     )
