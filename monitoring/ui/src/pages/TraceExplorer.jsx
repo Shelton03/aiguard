@@ -13,10 +13,9 @@ export default function TraceExplorer() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [hLabel, setHLabel] = useState('')
-  const [aLabel, setALabel] = useState('')
   const [hFamily, setHFamily] = useState('')
   const [hSubtype, setHSubtype] = useState('')
-  const [hSource, setHSource] = useState('')
+  const [aLabel, setALabel] = useState('')
 
   const fetchTraces = () => {
     setLoading(true)
@@ -27,10 +26,9 @@ export default function TraceExplorer() {
       ...(dateFrom && { date_from: dateFrom }),
       ...(dateTo && { date_to: dateTo }),
       ...(hLabel && { hallucination_label: hLabel }),
-      ...(aLabel && { adversarial_label: aLabel }),
       ...(hFamily && { hallucination_family: hFamily }),
       ...(hSubtype && { hallucination_subtype: hSubtype }),
-      ...(hSource && { hallucination_source: hSource }),
+      ...(aLabel && { adversarial_label: aLabel }),
     }
     api
       .getTraces(params)
@@ -54,7 +52,7 @@ export default function TraceExplorer() {
       </div>
 
       {/* Filter bar */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
+  <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-8 gap-4">
         <div className="flex flex-col gap-1">
           <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Model</label>
           <input
@@ -111,30 +109,27 @@ export default function TraceExplorer() {
             <option value="factuality">Factuality</option>
             <option value="faithfulness">Faithfulness</option>
           </select>
-          <span className="text-[11px] text-gray-400">Hallucination family filter.</span>
+          <span className="text-[11px] text-gray-400">High-level taxonomy bucket.</span>
         </div>
         <div className="flex flex-col gap-1">
           <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Subtype</label>
-          <input
-            className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-            placeholder="e.g. factual_contradiction"
-            value={hSubtype}
-            onChange={(e) => setHSubtype(e.target.value)}
-          />
-          <span className="text-[11px] text-gray-400">Optional: filter by subtype string.</span>
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Source</label>
           <select
             className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-            value={hSource}
-            onChange={(e) => setHSource(e.target.value)}
+            value={hSubtype}
+            onChange={(e) => setHSubtype(e.target.value)}
           >
-            <option value="">Any source</option>
-            <option value="intrinsic">Intrinsic</option>
-            <option value="extrinsic">Extrinsic</option>
+            <option value="">Any subtype</option>
+            <option value="factual_contradiction">Factual contradiction</option>
+            <option value="entity_error">Entity error</option>
+            <option value="relation_error">Relation error</option>
+            <option value="factual_fabrication">Factual fabrication</option>
+            <option value="unverifiable">Unverifiable</option>
+            <option value="overclaim">Overclaim</option>
+            <option value="instruction_inconsistency">Instruction inconsistency</option>
+            <option value="context_inconsistency">Context inconsistency</option>
+            <option value="logical_inconsistency">Logical inconsistency</option>
           </select>
-          <span className="text-[11px] text-gray-400">Hallucination source.</span>
+          <span className="text-[11px] text-gray-400">Granular hallucination type.</span>
         </div>
         <div className="flex flex-col gap-1">
           <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Adversarial</label>

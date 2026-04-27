@@ -35,6 +35,17 @@ function TaxonomyRow({ label, value }) {
   )
 }
 
+function deriveTaxonomy(category) {
+  if (!category || typeof category !== 'string') {
+    return { family: '—', subtype: '—', source: 'unknown' }
+  }
+  if (!category.includes('/')) {
+    return { family: category, subtype: '—', source: 'unknown' }
+  }
+  const [family, subtype] = category.split('/')
+  return { family, subtype, source: 'unknown' }
+}
+
 export default function TraceDetail() {
   const { traceId } = useParams()
   const [trace, setTrace] = useState(null)
@@ -149,19 +160,26 @@ export default function TraceDetail() {
                   Confidence: <span className="font-semibold">{Number(ev.confidence).toFixed(3)}</span>
                 </p>
               )}
-              {ev.metadata?.taxonomy && (
+              {((ev.metadata && ev.metadata.taxonomy) || ev.category) && (
                 <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
                   <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">
                     Taxonomy
                   </div>
                   <div className="space-y-1">
-                    <TaxonomyRow label="Family" value={ev.metadata.taxonomy.family} />
-                    <TaxonomyRow label="Subtype" value={ev.metadata.taxonomy.subtype} />
-                    <TaxonomyRow label="Source" value={ev.metadata.taxonomy.source} />
-                    {ev.metadata.taxonomy.judge_label && (
+                    {(() => {
+                      const taxonomy = ev.metadata?.taxonomy || deriveTaxonomy(ev.category)
+                      return (
+                        <>
+                          <TaxonomyRow label="Family" value={taxonomy.family} />
+                          <TaxonomyRow label="Subtype" value={taxonomy.subtype} />
+                          <TaxonomyRow label="Source" value={taxonomy.source} />
+                        </>
+                      )
+                    })()}
+                    {ev.metadata?.taxonomy?.judge_label && (
                       <TaxonomyRow label="Judge Label" value={ev.metadata.taxonomy.judge_label} />
                     )}
-                    {ev.metadata.taxonomy.judge_confidence != null && (
+                    {ev.metadata?.taxonomy?.judge_confidence != null && (
                       <TaxonomyRow
                         label="Judge Confidence"
                         value={Number(ev.metadata.taxonomy.judge_confidence).toFixed(2)}

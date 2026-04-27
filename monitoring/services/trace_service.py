@@ -51,13 +51,10 @@ class TraceService:
         date_from: Optional[str] = None,
         date_to: Optional[str] = None,
         hallucination_label: Optional[str] = None,
-        adversarial_label: Optional[str] = None,
         hallucination_family: Optional[str] = None,
         hallucination_subtype: Optional[str] = None,
-        hallucination_source: Optional[str] = None,
-        adversarial_family: Optional[str] = None,
-        adversarial_subtype: Optional[str] = None,
-        adversarial_source: Optional[str] = None,
+        hallucination_category: Optional[str] = None,
+        adversarial_label: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """Return a filtered list of trace dicts, newest first.
 
@@ -72,30 +69,11 @@ class TraceService:
         # Build quick lookups: trace_id → {module: risk_level/category}
         label_map: Dict[str, Dict[str, str]] = {}
         category_map: Dict[str, Dict[str, str]] = {}
-        taxonomy_map: Dict[str, Dict[str, Dict[str, Any]]] = {}
         for ev in raw_evals:
             tid = ev.get("trace_id", "")
             mod = ev.get("module", "")
             label_map.setdefault(tid, {})[mod] = ev.get("risk_level", "")
             category_map.setdefault(tid, {})[mod] = ev.get("category", "")
-            # Attempt to parse nested taxonomy if present inside scores JSON
-            tmeta = None
-            scores = ev.get("scores")
-            if isinstance(scores, str):
-                try:
-                    scores = json.loads(scores)
-                except Exception:
-                    scores = None
-            if isinstance(scores, dict):
-                tmeta = scores.get("taxonomy")
-            # Fallback: if no taxonomy in scores, try to infer from category string
-            if not tmeta:
-                cat = ev.get("category") or ""
-                if cat and "/" in cat:
-                    parts = cat.split("/", 1)
-                    tmeta = {"family": parts[0], "subtype": parts[1], "source": None}
-            if tmeta:
-                taxonomy_map.setdefault(tid, {})[mod] = tmeta
 
         # Parse filter datetimes once
         dt_from = _parse_dt(date_from)
@@ -114,42 +92,28 @@ class TraceService:
                 continue
             labels = label_map.get(t.get("id", ""), {})
             categories = category_map.get(t.get("id", ""), {})
-            taxonomies = taxonomy_map.get(t.get("id", ""), {})
+            hall_cat = categories.get("hallucination", "") or ""
+            hall_family = hall_cat.split("/")[0] if "/" in hall_cat else ""
+            hall_subtype = hall_cat.split("/")[-1] if "/" in hall_cat else ""
             if hallucination_label and labels.get("hallucination") != hallucination_label:
+                continue
+            if hallucination_category and hall_cat != hallucination_category:
+                continue
+            if hallucination_family and hall_family != hallucination_family:
+                continue
+            if hallucination_subtype and hall_subtype != hallucination_subtype:
                 continue
             if adversarial_label and labels.get("adversarial") != adversarial_label:
                 continue
-            # Taxonomy-level filtering (hallucination)
-            if hallucination_family or hallucination_subtype or hallucination_source:
-                h_tax = taxonomies.get("hallucination") or {}
-                # If there is no taxonomy at all, don't match
-                if not h_tax:
-                    continue
-                if hallucination_family and h_tax.get("family") != hallucination_family:
-                    continue
-                if hallucination_subtype and h_tax.get("subtype") != hallucination_subtype:
-                    continue
-                if hallucination_source and h_tax.get("source") != hallucination_source:
-                    continue
-            # Taxonomy-level filtering (adversarial)
-            if adversarial_family or adversarial_subtype or adversarial_source:
-                a_tax = taxonomies.get("adversarial") or {}
-                if not a_tax:
-                    continue
-                if adversarial_family and a_tax.get("family") != adversarial_family:
-                    continue
-                if adversarial_subtype and a_tax.get("subtype") != adversarial_subtype:
-                    continue
-                if adversarial_source and a_tax.get("source") != adversarial_source:
-                    continue
 
             results.append(
                 {
                     **t,
                     "hallucination_label": labels.get("hallucination"),
                     "adversarial_label": labels.get("adversarial"),
-                    "hallucination_category": categories.get("hallucination"),
-                    "adversarial_category": categories.get("adversarial"),
+                    "hallucination_category": hall_cat or None,
+                    "hallucination_family": hall_family or None,
+                    "hallucination_subtype": hall_subtype or None,
                     "metadata": json.loads(t["metadata"])
                     if isinstance(t.get("metadata"), str)
                     else (t.get("metadata") or {}),

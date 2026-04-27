@@ -24,13 +24,10 @@ def list_traces(
     date_from: Optional[str] = Query(None, description="ISO-8601 start datetime"),
     date_to: Optional[str] = Query(None, description="ISO-8601 end datetime"),
     hallucination_label: Optional[str] = Query(None, description="'safe' or 'hallucinated'"),
+    hallucination_family: Optional[str] = Query(None, description="factuality|faithfulness"),
+    hallucination_subtype: Optional[str] = Query(None, description="Hallucination subtype"),
+    hallucination_category: Optional[str] = Query(None, description="Hallucination category string"),
     adversarial_label: Optional[str] = Query(None, description="'safe' or 'injection_detected'"),
-        hallucination_family: Optional[str] = Query(None, description="Hallucination family (factuality|faithfulness)"),
-        hallucination_subtype: Optional[str] = Query(None, description="Hallucination subtype (e.g. factual_contradiction)"),
-        hallucination_source: Optional[str] = Query(None, description="Hallucination source (intrinsic|extrinsic)"),
-        adversarial_family: Optional[str] = Query(None, description="Adversarial family"),
-        adversarial_subtype: Optional[str] = Query(None, description="Adversarial subtype"),
-        adversarial_source: Optional[str] = Query(None, description="Adversarial source"),
     service: TraceService = Depends(_get_service),
 ) -> List[Dict[str, Any]]:
     """Return a filtered, paginated list of traces."""
@@ -40,13 +37,10 @@ def list_traces(
         date_from=date_from,
         date_to=date_to,
         hallucination_label=hallucination_label,
-        adversarial_label=adversarial_label,
         hallucination_family=hallucination_family,
         hallucination_subtype=hallucination_subtype,
-        hallucination_source=hallucination_source,
-        adversarial_family=adversarial_family,
-        adversarial_subtype=adversarial_subtype,
-        adversarial_source=adversarial_source,
+        hallucination_category=hallucination_category,
+        adversarial_label=adversarial_label,
     )
 
 
