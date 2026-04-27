@@ -30,7 +30,12 @@ def evaluate_self_consistency(response: str) -> Tuple[ScoreBundle, str]:
     uncertainty_score = clamp(0.3 + 0.4 * fabricated + 0.2 * has_contradiction)
     overall_risk = clamp(1 - consistency_score + uncertainty_score * 0.5)
 
-    category = HallucinationCategory.SELF_CONTRADICTION if has_contradiction else HallucinationCategory.OVERCONFIDENT if fabricated else HallucinationCategory.UNKNOWN
+    if has_contradiction:
+        category = HallucinationCategory.LOGICAL_INCONSISTENCY
+    elif fabricated:
+        category = HallucinationCategory.FACTUAL_FABRICATION
+    else:
+        category = HallucinationCategory.UNKNOWN
     reasoning = f"contradiction={has_contradiction}, fabricated_specificity={fabricated}"
     bundle = ScoreBundle(
         factual_score=None,

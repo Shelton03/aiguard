@@ -22,7 +22,7 @@ def estimate_uncertainty(response: str) -> Tuple[ScoreBundle, str]:
     uncertainty_score = clamp(0.5 + 0.1 * hedges - 0.2 * overconf - 0.1 * fabricated_specificity)
     overall_risk = clamp(1 - uncertainty_score + 0.2 * fabricated_specificity)
 
-    category = HallucinationCategory.OVERCONFIDENT if overconf > hedges else HallucinationCategory.UNKNOWN
+    category = HallucinationCategory.OVERCLAIM if overconf > hedges else HallucinationCategory.UNKNOWN
     reasoning = f"hedges={hedges}, overconf={overconf}, fabricated_specificity={fabricated_specificity}"
     bundle = ScoreBundle(
         factual_score=None,

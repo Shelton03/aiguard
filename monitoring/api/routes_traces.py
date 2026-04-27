@@ -24,6 +24,9 @@ def list_traces(
     date_from: Optional[str] = Query(None, description="ISO-8601 start datetime"),
     date_to: Optional[str] = Query(None, description="ISO-8601 end datetime"),
     hallucination_label: Optional[str] = Query(None, description="'safe' or 'hallucinated'"),
+    hallucination_family: Optional[str] = Query(None, description="factuality|faithfulness"),
+    hallucination_subtype: Optional[str] = Query(None, description="Hallucination subtype"),
+    hallucination_category: Optional[str] = Query(None, description="Hallucination category string"),
     adversarial_label: Optional[str] = Query(None, description="'safe' or 'injection_detected'"),
     service: TraceService = Depends(_get_service),
 ) -> List[Dict[str, Any]]:
@@ -34,6 +37,9 @@ def list_traces(
         date_from=date_from,
         date_to=date_to,
         hallucination_label=hallucination_label,
+        hallucination_family=hallucination_family,
+        hallucination_subtype=hallucination_subtype,
+        hallucination_category=hallucination_category,
         adversarial_label=adversarial_label,
     )
 

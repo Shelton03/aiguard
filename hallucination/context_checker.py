@@ -39,7 +39,11 @@ def evaluate_against_context(response: str, context_documents: Iterable[str]) ->
     support, contradiction = _support_score(response, context_documents)
     grounding = clamp(support * (1 - contradiction))
     overall_risk = clamp(1 - grounding)
-    category = HallucinationCategory.CONTRADICTION if contradiction > 0.3 else HallucinationCategory.UNSUPPORTED_CLAIM
+    category = (
+        HallucinationCategory.CONTEXT_INCONSISTENCY
+        if contradiction > 0.3
+        else HallucinationCategory.UNVERIFIABLE
+    )
     reasoning = f"support={support:.2f}, contradiction={contradiction:.2f}"
     bundle = ScoreBundle(
         factual_score=None,

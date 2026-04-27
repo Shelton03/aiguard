@@ -51,6 +51,9 @@ class TraceService:
         date_from: Optional[str] = None,
         date_to: Optional[str] = None,
         hallucination_label: Optional[str] = None,
+        hallucination_family: Optional[str] = None,
+        hallucination_subtype: Optional[str] = None,
+        hallucination_category: Optional[str] = None,
         adversarial_label: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """Return a filtered list of trace dicts, newest first.
@@ -63,12 +66,14 @@ class TraceService:
         raw_traces: List[Dict[str, Any]] = export.get("traces", [])
         raw_evals: List[Dict[str, Any]] = export.get("evaluation_results", [])
 
-        # Build a quick lookup: trace_id → {module: risk_level}
+        # Build quick lookups: trace_id → {module: risk_level/category}
         label_map: Dict[str, Dict[str, str]] = {}
+        category_map: Dict[str, Dict[str, str]] = {}
         for ev in raw_evals:
             tid = ev.get("trace_id", "")
             mod = ev.get("module", "")
             label_map.setdefault(tid, {})[mod] = ev.get("risk_level", "")
+            category_map.setdefault(tid, {})[mod] = ev.get("category", "")
 
         # Parse filter datetimes once
         dt_from = _parse_dt(date_from)
@@ -86,7 +91,17 @@ class TraceService:
             if dt_to and ts and ts > dt_to:
                 continue
             labels = label_map.get(t.get("id", ""), {})
+            categories = category_map.get(t.get("id", ""), {})
+            hall_cat = categories.get("hallucination", "") or ""
+            hall_family = hall_cat.split("/")[0] if "/" in hall_cat else ""
+            hall_subtype = hall_cat.split("/")[-1] if "/" in hall_cat else ""
             if hallucination_label and labels.get("hallucination") != hallucination_label:
+                continue
+            if hallucination_category and hall_cat != hallucination_category:
+                continue
+            if hallucination_family and hall_family != hallucination_family:
+                continue
+            if hallucination_subtype and hall_subtype != hallucination_subtype:
                 continue
             if adversarial_label and labels.get("adversarial") != adversarial_label:
                 continue
@@ -96,6 +111,9 @@ class TraceService:
                     **t,
                     "hallucination_label": labels.get("hallucination"),
                     "adversarial_label": labels.get("adversarial"),
+                    "hallucination_category": hall_cat or None,
+                    "hallucination_family": hall_family or None,
+                    "hallucination_subtype": hall_subtype or None,
                     "metadata": json.loads(t["metadata"])
                     if isinstance(t.get("metadata"), str)
                     else (t.get("metadata") or {}),

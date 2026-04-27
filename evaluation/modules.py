@@ -11,6 +11,7 @@ import logging
 from adversarial import AttackStorage, load_datasets, load_default_dataset
 from adversarial.scoring import HeuristicScorer, ResponseHeuristicScorer
 from hallucination.hallucination_test import HallucinationTest
+from config.judge_config import load_judge_config
 
 from evaluation.base import BaseEvaluationModule
 from evaluation.registry import module_registry
@@ -109,6 +110,7 @@ class AdversarialEvaluationModule(BaseEvaluationModule):
                     "attack_id": attack.attack_id,
                     "attack_type": attack.attack_type.value,
                     "subtype": attack.subtype,
+                    "category": f"{attack.attack_type.value}/{attack.subtype or 'unspecified'}",
                     "avg_score": avg_score,
                     "content": attack.content,
                     "response": response_text,
@@ -142,6 +144,7 @@ class AdversarialEvaluationModule(BaseEvaluationModule):
                     "attack_id": rec["attack_id"],
                     "attack_type": rec["attack_type"],
                     "subtype": rec["subtype"],
+                    "category": rec["category"],
                     "avg_score": round(rec["avg_score"], 6),
                     "content_snippet": _truncate(rec["content"]),
                     "response_snippet": _truncate(rec.get("response", "")),
@@ -214,7 +217,11 @@ class HallucinationEvaluationModule(BaseEvaluationModule):
                 self._error = _ModuleError(str(exc))
                 return
 
-        evaluator = HallucinationTest()
+        judge_cfg = load_judge_config(Path(self.root_dir))
+        evaluator = HallucinationTest(
+            enable_judge=bool(judge_cfg.enabled),
+            judge_config=judge_cfg,
+        )
         results: List[Dict[str, Any]] = []
         logger.info("Hallucination: running %d test cases", len(test_cases))
         for idx, case in enumerate(test_cases, start=1):
