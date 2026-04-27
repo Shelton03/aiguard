@@ -49,7 +49,7 @@ def _now_iso() -> str:
 
 
 def _render_project_template(project: str) -> str:
-        return f"""project: {project}
+    return f"""project: {project}
 
 model:
     provider: openai
