@@ -26,6 +26,15 @@ function Field({ label, value, hint }) {
   )
 }
 
+function TaxonomyRow({ label, value }) {
+  return (
+    <div className="flex items-center justify-between text-xs">
+      <span className="text-gray-500">{label}</span>
+      <span className="font-semibold text-gray-800">{value || '—'}</span>
+    </div>
+  )
+}
+
 export default function TraceDetail() {
   const { traceId } = useParams()
   const [trace, setTrace] = useState(null)
@@ -139,6 +148,27 @@ export default function TraceDetail() {
                 <p className="text-xs text-gray-500">
                   Confidence: <span className="font-semibold">{Number(ev.confidence).toFixed(3)}</span>
                 </p>
+              )}
+              {ev.metadata?.taxonomy && (
+                <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
+                  <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">
+                    Taxonomy
+                  </div>
+                  <div className="space-y-1">
+                    <TaxonomyRow label="Family" value={ev.metadata.taxonomy.family} />
+                    <TaxonomyRow label="Subtype" value={ev.metadata.taxonomy.subtype} />
+                    <TaxonomyRow label="Source" value={ev.metadata.taxonomy.source} />
+                    {ev.metadata.taxonomy.judge_label && (
+                      <TaxonomyRow label="Judge Label" value={ev.metadata.taxonomy.judge_label} />
+                    )}
+                    {ev.metadata.taxonomy.judge_confidence != null && (
+                      <TaxonomyRow
+                        label="Judge Confidence"
+                        value={Number(ev.metadata.taxonomy.judge_confidence).toFixed(2)}
+                      />
+                    )}
+                  </div>
+                </div>
               )}
             </div>
           ))}

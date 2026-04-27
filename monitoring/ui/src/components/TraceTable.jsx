@@ -17,6 +17,16 @@ function LabelBadge({ label }) {
   )
 }
 
+function CategoryBadge({ value }) {
+  if (!value) return <span className="text-gray-300 text-xs">—</span>
+  const trimmed = String(value).replace(/^factuality\//, '').replace(/^faithfulness\//, '')
+  return (
+    <span className="inline-flex items-center rounded-full bg-slate-100 text-slate-600 px-2 py-0.5 text-[10px]">
+      {trimmed}
+    </span>
+  )
+}
+
 /**
  * TraceTable — renders a list of trace summaries.
  *
@@ -55,7 +65,7 @@ export default function TraceTable({ traces = [] }) {
             <th className="text-left px-4 py-3 font-semibold">
               <div className="flex flex-col">
                 <span>Hallucination</span>
-                <span className="text-[10px] text-gray-400 font-normal">Correctness risk</span>
+                <span className="text-[10px] text-gray-400 font-normal">Label + subtype</span>
               </div>
             </th>
             <th className="text-left px-4 py-3 font-semibold">
@@ -85,7 +95,10 @@ export default function TraceTable({ traces = [] }) {
                 {t.tokens_used != null ? t.tokens_used : '—'}
               </td>
               <td className="px-4 py-3">
-                <LabelBadge label={t.hallucination_label} />
+                <div className="flex flex-col gap-1">
+                  <LabelBadge label={t.hallucination_label} />
+                  <CategoryBadge value={t.hallucination_category} />
+                </div>
               </td>
               <td className="px-4 py-3">
                 <LabelBadge label={t.adversarial_label} />

@@ -14,6 +14,9 @@ export default function TraceExplorer() {
   const [dateTo, setDateTo] = useState('')
   const [hLabel, setHLabel] = useState('')
   const [aLabel, setALabel] = useState('')
+  const [hFamily, setHFamily] = useState('')
+  const [hSubtype, setHSubtype] = useState('')
+  const [hSource, setHSource] = useState('')
 
   const fetchTraces = () => {
     setLoading(true)
@@ -25,6 +28,9 @@ export default function TraceExplorer() {
       ...(dateTo && { date_to: dateTo }),
       ...(hLabel && { hallucination_label: hLabel }),
       ...(aLabel && { adversarial_label: aLabel }),
+      ...(hFamily && { hallucination_family: hFamily }),
+      ...(hSubtype && { hallucination_subtype: hSubtype }),
+      ...(hSource && { hallucination_source: hSource }),
     }
     api
       .getTraces(params)
@@ -95,6 +101,42 @@ export default function TraceExplorer() {
           <span className="text-[11px] text-gray-400">Correctness risk signal.</span>
         </div>
         <div className="flex flex-col gap-1">
+          <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Family</label>
+          <select
+            className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            value={hFamily}
+            onChange={(e) => setHFamily(e.target.value)}
+          >
+            <option value="">Any family</option>
+            <option value="factuality">Factuality</option>
+            <option value="faithfulness">Faithfulness</option>
+          </select>
+          <span className="text-[11px] text-gray-400">Hallucination family filter.</span>
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Subtype</label>
+          <input
+            className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            placeholder="e.g. factual_contradiction"
+            value={hSubtype}
+            onChange={(e) => setHSubtype(e.target.value)}
+          />
+          <span className="text-[11px] text-gray-400">Optional: filter by subtype string.</span>
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Source</label>
+          <select
+            className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            value={hSource}
+            onChange={(e) => setHSource(e.target.value)}
+          >
+            <option value="">Any source</option>
+            <option value="intrinsic">Intrinsic</option>
+            <option value="extrinsic">Extrinsic</option>
+          </select>
+          <span className="text-[11px] text-gray-400">Hallucination source.</span>
+        </div>
+        <div className="flex flex-col gap-1">
           <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Adversarial</label>
           <select
             className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
@@ -130,7 +172,7 @@ export default function TraceExplorer() {
           },
           {
             title: 'Labels',
-            body: 'Risk signals from hallucination and adversarial evaluators.',
+            body: 'Risk signals from hallucination/adversarial evaluators + taxonomy subtypes.',
           },
         ].map((item) => (
           <div key={item.title} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">

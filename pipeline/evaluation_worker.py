@@ -251,6 +251,10 @@ class EvaluationWorker:
         if bundle.hallucination is not None:
             r = bundle.hallucination
             raw = r.raw or {}
+            scores = dict(raw.get("scores", {"overall_risk": r.score}))
+            taxonomy = raw.get("metadata", {}).get("taxonomy")
+            if taxonomy:
+                scores["taxonomy"] = taxonomy
             rec = EvaluationResultRecord(
                 id=str(uuid.uuid4()),
                 trace_id=event.trace_id,
@@ -258,7 +262,7 @@ class EvaluationWorker:
                 module="hallucination",
                 mode=raw.get("mode", "unknown"),
                 execution_mode=raw.get("execution_mode", "monitoring"),
-                scores=raw.get("scores", {"overall_risk": r.score}),
+                scores=scores,
                 category=raw.get("category", "unknown"),
                 risk_level=r.label,
                 confidence=r.confidence,
@@ -274,6 +278,9 @@ class EvaluationWorker:
 
         if bundle.adversarial is not None:
             r = bundle.adversarial
+            scores = {"score": r.score}
+            if r.raw:
+                scores.update(r.raw)
             rec = EvaluationResultRecord(
                 id=str(uuid.uuid4()),
                 trace_id=event.trace_id,
@@ -281,8 +288,8 @@ class EvaluationWorker:
                 module="adversarial",
                 mode="injection_check",
                 execution_mode="monitoring",
-                scores={"score": r.score},
-                category="prompt_injection",
+                scores=scores,
+                category=scores.get("category", "prompt_injection"),
                 risk_level=r.label,
                 confidence=r.confidence,
                 created_at=now,
