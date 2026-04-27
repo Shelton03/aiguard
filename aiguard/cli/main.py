@@ -49,39 +49,39 @@ def _now_iso() -> str:
 
 
 def _render_project_template(project: str) -> str:
-    return f"""project: {project}
+        return f"""project: {project}
 
 model:
-  provider: openai
-  endpoint: https://api.openai.com/v1
-  model_name: gpt-4o
-  api_key_env: OPENAI_API_KEY
+    provider: openai
+    endpoint: https://api.openai.com/v1
+    model_name: gpt-4o
+    api_key_env: OPENAI_API_KEY
     system_prompt_path: prompt_template.py
     tools_path: tools.py
 
 evaluation:
-  enabled_modules:
-    - adversarial
-    - hallucination
-  adversarial:
-    threshold: 0.15
-    mode: quick
-    runs_per_test: 3
-    # dataset_config: datasets.json  # omit to use the bundled default adversarial dataset
+    enabled_modules:
+        - adversarial
+        - hallucination
+    adversarial:
+        threshold: 0.15
+        mode: quick
+        runs_per_test: 3
+        # dataset_config: datasets.json  # omit to use the bundled default adversarial dataset
         use_live_model: true
-  hallucination:
-    threshold: 0.25
+    hallucination:
+        threshold: 0.25
         test_cases: hallucination_test_cases.json
         use_live_model: true
 
 monitoring:
-  enabled: true
-  sampling_rate: 1.0
-  queue_maxsize: 10000
-  api:
-    host: "0.0.0.0"
-    port: 8080
-  ui_port: 3000
+    enabled: true
+    sampling_rate: 1.0
+    queue_maxsize: 10000
+    api:
+        host: "0.0.0.0"
+        port: 8080
+    ui_port: 3000
 
 review:
     port: 8000
@@ -96,11 +96,11 @@ judge:
     temperature: 0.0
 
 pipeline:
-  evaluation_batch_interval_hours: 3
-  max_batch_size: 500
-  enable_hallucination_eval: true
-  enable_adversarial_eval: false
-  project_id: ""
+    evaluation_batch_interval_hours: 3
+    max_batch_size: 500
+    enable_hallucination_eval: true
+    enable_adversarial_eval: false
+    project_id: ""
 
 storage: sqlite
 """
