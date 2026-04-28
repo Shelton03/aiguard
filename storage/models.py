@@ -45,6 +45,7 @@ class EvaluationResultRecord:
     risk_level: str
     confidence: float
     created_at: datetime
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass

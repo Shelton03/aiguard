@@ -251,10 +251,14 @@ class EvaluationWorker:
         if bundle.hallucination is not None:
             r = bundle.hallucination
             raw = r.raw or {}
-            scores = dict(raw.get("scores", {"overall_risk": r.score}))
-            taxonomy = raw.get("metadata", {}).get("taxonomy")
-            if taxonomy:
-                scores["taxonomy"] = taxonomy
+            try:
+                self._storage.delete_evaluations_for_trace(event.trace_id, "hallucination")
+            except Exception:
+                logger.exception(
+                    "EvaluationWorker: failed to clear prior hallucination eval for %s",
+                    event.trace_id,
+                )
+            meta = {**(raw.get("metadata") or {}), "explanation": r.explanation}
             rec = EvaluationResultRecord(
                 id=str(uuid.uuid4()),
                 trace_id=event.trace_id,
@@ -262,11 +266,12 @@ class EvaluationWorker:
                 module="hallucination",
                 mode=raw.get("mode", "unknown"),
                 execution_mode=raw.get("execution_mode", "monitoring"),
-                scores=scores,
+                scores=raw.get("scores", {"overall_risk": r.score}),
                 category=raw.get("category", "unknown"),
                 risk_level=r.label,
                 confidence=r.confidence,
                 created_at=now,
+                metadata=meta,
             )
             try:
                 self._storage.save_evaluation(rec)
@@ -278,9 +283,14 @@ class EvaluationWorker:
 
         if bundle.adversarial is not None:
             r = bundle.adversarial
-            scores = {"score": r.score}
-            if r.raw:
-                scores.update(r.raw)
+            try:
+                self._storage.delete_evaluations_for_trace(event.trace_id, "adversarial")
+            except Exception:
+                logger.exception(
+                    "EvaluationWorker: failed to clear prior adversarial eval for %s",
+                    event.trace_id,
+                )
+            meta = {**(r.raw or {}), "explanation": r.explanation}
             rec = EvaluationResultRecord(
                 id=str(uuid.uuid4()),
                 trace_id=event.trace_id,
@@ -288,11 +298,12 @@ class EvaluationWorker:
                 module="adversarial",
                 mode="injection_check",
                 execution_mode="monitoring",
-                scores=scores,
-                category=scores.get("category", "prompt_injection"),
+                scores={"score": r.score},
+                category="prompt_injection",
                 risk_level=r.label,
                 confidence=r.confidence,
                 created_at=now,
+                metadata=meta,
             )
             try:
                 self._storage.save_evaluation(rec)

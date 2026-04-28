@@ -1232,7 +1232,7 @@ Interactive docs at `http://localhost:8080/docs`.
 
 ```bash
 # Starts API + UI preview
-aiguard monitor
+c
 
 # UI preview only
 aiguard monitor ui

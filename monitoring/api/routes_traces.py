@@ -56,6 +56,48 @@ def get_trace(
     return result
 
 
+@router.post("/{trace_id}/evaluate", response_model=Dict[str, Any])
+def evaluate_trace(
+    trace_id: str,
+    force_judge: bool = Query(False, description="Force judge evaluation even below thresholds"),
+    service: TraceService = Depends(_get_service),
+) -> Dict[str, Any]:
+    """Re-evaluate a stored trace and update its evaluation records."""
+    trace_row = service.get_trace_record(trace_id)
+    if trace_row is None:
+        raise HTTPException(status_code=404, detail=f"Trace '{trace_id}' not found.")
+
+    prompt = trace_row.get("prompt") or ""
+    trace_dict = {
+        "trace_id": trace_row.get("id"),
+        "timestamp": trace_row.get("timestamp"),
+        "model": trace_row.get("model_name"),
+        "provider": trace_row.get("metadata", {}).get("provider", ""),
+        "input_messages": [{"role": "user", "content": prompt}] if prompt else [],
+        "output_text": trace_row.get("response"),
+        "latency_ms": trace_row.get("latency_ms", 0.0),
+        "token_usage": {"total_tokens": trace_row.get("tokens_used")}
+        if trace_row.get("tokens_used")
+        else None,
+        "metadata": trace_row.get("metadata") or {},
+    }
+
+    config = load_pipeline_config()
+    if force_judge:
+        config.enable_hallucination_eval = True
+        config.judge.enabled = True
+
+    worker = EvaluationWorker(config=config)
+    event = TraceCreatedEvent.from_trace_dict(trace_dict, project_id=config.project_id)
+    evaluated = worker.process_batch([event])
+
+    return {
+        "trace_id": trace_id,
+        "evaluated": len(evaluated),
+        "forced_judge": force_judge,
+    }
+
+
 @router.post("/ingest", tags=["traces"], response_model=Dict[str, Any])
 def ingest_trace(
     payload: Any = Body(..., description="Trace dict or list of trace dicts."),

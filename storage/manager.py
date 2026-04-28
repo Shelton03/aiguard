@@ -56,6 +56,9 @@ class StorageManager:
     def save_review(self, review: ReviewLabel) -> None:
         self.backend.save_review(self.project, review)
 
+    def delete_evaluations_for_trace(self, trace_id: str, module: str) -> None:
+        self.backend.delete_evaluations_for_trace(self.project, trace_id, module)
+
     def get_evaluations(self, limit: int = 100) -> List[EvaluationResultRecord]:
         return self.backend.get_evaluations(self.project, limit)
 

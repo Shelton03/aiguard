@@ -148,6 +148,11 @@ class TraceService:
                     ev["scores"] = json.loads(ev["scores"])
                 except Exception:
                     pass
+            if isinstance(ev.get("metadata"), str):
+                try:
+                    ev["metadata"] = json.loads(ev["metadata"])
+                except Exception:
+                    pass
 
         return {
             **trace_row,
@@ -155,4 +160,20 @@ class TraceService:
             if isinstance(trace_row.get("metadata"), str)
             else (trace_row.get("metadata") or {}),
             "evaluations": evals,
+        }
+
+    def get_trace_record(self, trace_id: str) -> Optional[Dict[str, Any]]:
+        """Return the raw stored trace row for internal workflows."""
+        export = self._storage.export_project()
+        trace_row = next(
+            (t for t in export.get("traces", []) if t.get("id") == trace_id),
+            None,
+        )
+        if trace_row is None:
+            return None
+        return {
+            **trace_row,
+            "metadata": json.loads(trace_row["metadata"])
+            if isinstance(trace_row.get("metadata"), str)
+            else (trace_row.get("metadata") or {}),
         }

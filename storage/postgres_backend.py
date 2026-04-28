@@ -58,6 +58,7 @@ TABLES = [
         category TEXT,
         risk_level TEXT,
         confidence DOUBLE PRECISION,
+        metadata JSONB,
         created_at TIMESTAMP
     );
     """,
@@ -113,7 +114,20 @@ class PostgresBackend(BaseBackend):
             cur = conn.cursor()
             for stmt in TABLES:
                 cur.execute(stmt)
+            self._ensure_eval_metadata_column(cur)
             conn.commit()
+
+    def _ensure_eval_metadata_column(self, cur) -> None:
+        cur.execute(
+            """
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_name = 'evaluation_results'
+              AND column_name = 'metadata'
+            """
+        )
+        if cur.fetchone() is None:
+            cur.execute("ALTER TABLE evaluation_results ADD COLUMN metadata JSONB")
 
     def save_test_case(self, project: str, case: TestCase) -> None:
         with self._connect() as conn:
@@ -186,8 +200,8 @@ class PostgresBackend(BaseBackend):
             cur = conn.cursor()
             cur.execute(
                 """
-                INSERT INTO evaluation_results (project, id, trace_id, test_case_id, module, mode, execution_mode, scores, category, risk_level, confidence, created_at)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                INSERT INTO evaluation_results (project, id, trace_id, test_case_id, module, mode, execution_mode, scores, category, risk_level, confidence, metadata, created_at)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 ON CONFLICT (id) DO UPDATE SET
                     trace_id=EXCLUDED.trace_id,
                     test_case_id=EXCLUDED.test_case_id,
@@ -198,6 +212,7 @@ class PostgresBackend(BaseBackend):
                     category=EXCLUDED.category,
                     risk_level=EXCLUDED.risk_level,
                     confidence=EXCLUDED.confidence,
+                    metadata=EXCLUDED.metadata,
                     created_at=EXCLUDED.created_at
                 ;
                 """,
@@ -213,6 +228,7 @@ class PostgresBackend(BaseBackend):
                     result.category,
                     result.risk_level,
                     result.confidence,
+                    json.dumps(result.metadata or {}),
                     result.created_at,
                 ),
             )
@@ -247,11 +263,20 @@ class PostgresBackend(BaseBackend):
             )
             conn.commit()
 
+    def delete_evaluations_for_trace(self, project: str, trace_id: str, module: str) -> None:
+        with self._connect() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "DELETE FROM evaluation_results WHERE project=%s AND trace_id=%s AND module=%s",
+                (project, trace_id, module),
+            )
+            conn.commit()
+
     def get_evaluations(self, project: str, limit: int = 100) -> List[EvaluationResultRecord]:
         with self._connect() as conn:
             cur = conn.cursor()
             cur.execute(
-                "SELECT id, trace_id, test_case_id, module, mode, execution_mode, scores, category, risk_level, confidence, created_at FROM evaluation_results WHERE project=%s ORDER BY created_at DESC LIMIT %s",
+                "SELECT id, trace_id, test_case_id, module, mode, execution_mode, scores, category, risk_level, confidence, metadata, created_at FROM evaluation_results WHERE project=%s ORDER BY created_at DESC LIMIT %s",
                 (project, limit),
             )
             rows = cur.fetchall()
@@ -267,7 +292,8 @@ class PostgresBackend(BaseBackend):
                     category=r[7],
                     risk_level=r[8],
                     confidence=float(r[9]),
-                    created_at=r[10],
+                    metadata=r[10] or {},
+                    created_at=r[11],
                 )
                 for r in rows
             ]
@@ -369,6 +395,7 @@ class PostgresBackend(BaseBackend):
                     risk_level=row["risk_level"],
                     confidence=float(row["confidence"]),
                     created_at=row["created_at"],
+                    metadata=row.get("metadata") or {},
                 ),
             )
         for row in payload.get("review_labels", []):

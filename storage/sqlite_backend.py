@@ -52,6 +52,7 @@ SCHEMA = [
         category TEXT,
         risk_level TEXT,
         confidence REAL,
+        metadata TEXT,
         created_at TEXT
     );
     """,
@@ -96,6 +97,12 @@ class SQLiteBackend(BaseBackend):
         with self._connect() as conn:
             for stmt in SCHEMA:
                 conn.execute(stmt)
+            self._ensure_eval_metadata_column(conn)
+
+    def _ensure_eval_metadata_column(self, conn: sqlite3.Connection) -> None:
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(evaluation_results)").fetchall()}
+        if "metadata" not in cols:
+            conn.execute("ALTER TABLE evaluation_results ADD COLUMN metadata TEXT")
 
     def save_test_case(self, project: str, case: TestCase) -> None:
         with self._connect() as conn:
@@ -144,8 +151,8 @@ class SQLiteBackend(BaseBackend):
             conn.execute(
                 """
                 INSERT OR REPLACE INTO evaluation_results (
-                    project, id, trace_id, test_case_id, module, mode, execution_mode, scores, category, risk_level, confidence, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    project, id, trace_id, test_case_id, module, mode, execution_mode, scores, category, risk_level, confidence, metadata, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     project,
@@ -159,6 +166,7 @@ class SQLiteBackend(BaseBackend):
                     result.category,
                     result.risk_level,
                     result.confidence,
+                    json.dumps(result.metadata or {}),
                     result.created_at.isoformat(),
                 ),
             )
@@ -182,6 +190,13 @@ class SQLiteBackend(BaseBackend):
                 ),
             )
 
+    def delete_evaluations_for_trace(self, project: str, trace_id: str, module: str) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                "DELETE FROM evaluation_results WHERE project = ? AND trace_id = ? AND module = ?",
+                (project, trace_id, module),
+            )
+
     def get_evaluations(self, project: str, limit: int = 100) -> List[EvaluationResultRecord]:
         with self._connect() as conn:
             rows = conn.execute(
@@ -200,6 +215,7 @@ class SQLiteBackend(BaseBackend):
                     category=row["category"],
                     risk_level=row["risk_level"],
                     confidence=row["confidence"],
+                    metadata=json.loads(row.get("metadata") or "{}"),
                     created_at=datetime.fromisoformat(row["created_at"]),
                 )
                 for row in rows
@@ -290,6 +306,7 @@ class SQLiteBackend(BaseBackend):
                     risk_level=row["risk_level"],
                     confidence=row["confidence"],
                     created_at=datetime.fromisoformat(row["created_at"]),
+                    metadata=json.loads(row.get("metadata") or "{}"),
                 ),
             )
         for row in payload.get("review_labels", []):

@@ -51,6 +51,8 @@ export default function TraceDetail() {
   const [trace, setTrace] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [rejudgeLoading, setRejudgeLoading] = useState(false)
+  const [rejudgeError, setRejudgeError] = useState(null)
 
   useEffect(() => {
     api
@@ -69,6 +71,20 @@ export default function TraceDetail() {
     )
   if (!trace) return <p className="text-gray-400">Trace not found.</p>
 
+  const handleForceJudge = async () => {
+    setRejudgeLoading(true)
+    setRejudgeError(null)
+    try {
+      await api.evaluateTrace(traceId, true)
+      const refreshed = await api.getTrace(traceId)
+      setTrace(refreshed)
+    } catch (e) {
+      setRejudgeError(e.message || 'Failed to trigger judge evaluation.')
+    } finally {
+      setRejudgeLoading(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Back link */}
@@ -76,11 +92,24 @@ export default function TraceDetail() {
         ← Back to traces
       </Link>
 
-      <div className="space-y-1">
-        <h1 className="text-xl font-bold text-gray-800 font-mono break-all">{trace.id}</h1>
-        <p className="text-sm text-gray-500">
-          Full trace record including prompt, model response, and evaluation signals.
-        </p>
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="space-y-1">
+          <h1 className="text-xl font-bold text-gray-800 font-mono break-all">{trace.id}</h1>
+          <p className="text-sm text-gray-500">
+            Full trace record including prompt, model response, and evaluation signals.
+          </p>
+        </div>
+        <div className="flex flex-col items-start gap-2 md:items-end">
+          <button
+            type="button"
+            onClick={handleForceJudge}
+            disabled={rejudgeLoading}
+            className="text-sm font-semibold px-3 py-2 rounded-lg border border-brand-200 text-brand-700 hover:bg-brand-50 disabled:opacity-60"
+          >
+            {rejudgeLoading ? 'Running judge…' : 'Force judge evaluation'}
+          </button>
+          {rejudgeError && <span className="text-xs text-red-500">{rejudgeError}</span>}
+        </div>
       </div>
 
       {/* Core fields */}
@@ -184,6 +213,11 @@ export default function TraceDetail() {
                         label="Judge Confidence"
                         value={Number(ev.metadata.taxonomy.judge_confidence).toFixed(2)}
                       />
+                    )}
+                    {ev.metadata?.taxonomy?.judge_rationale && (
+                      <div className="text-[11px] text-slate-500 leading-relaxed pt-1">
+                        {ev.metadata.taxonomy.judge_rationale}
+                      </div>
                     )}
                   </div>
                 </div>
