@@ -14,6 +14,7 @@ dependencies = [
     "pyyaml>=6.0",
     "litellm>=1.0",
     "datasets>=2.16.0",
+    "langdetect>=1.0.9",
 ]
 license = "MIT"
 keywords = ["llm", "safety", "evaluation", "robustness", "hallucination", "adversarial", "ai", "guardrails"]

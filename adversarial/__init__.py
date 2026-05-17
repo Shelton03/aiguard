@@ -18,6 +18,7 @@ from .evolutionary import EvolutionaryEngine, EvolutionConfig
 from .scoring import HeuristicScorer
 from .data import builtin_datasets_json, resolve_builtin_path
 from .data import DATA_DIR
+from .language_detection import detect_language, get_refusal_keywords, get_compliance_keywords, get_attack_keywords
 
 
 def load_datasets(config_path: Optional[str], storage: Optional[AttackStorage] = None) -> int:
@@ -159,4 +160,8 @@ __all__ = [
     "EvolutionaryEngine",
     "EvolutionConfig",
     "HeuristicScorer",
+    "detect_language",
+    "get_refusal_keywords",
+    "get_compliance_keywords",
+    "get_attack_keywords",
 ]

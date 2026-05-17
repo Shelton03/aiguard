@@ -107,6 +107,7 @@ class AdversarialEvaluationModule(BaseEvaluationModule):
             response_text = ""
             rationale = ""
             judge_result = None
+            signals = None
             if model_client:
                 scores = []
                 for _ in range(runs_per_test):
@@ -115,6 +116,7 @@ class AdversarialEvaluationModule(BaseEvaluationModule):
                     scored = response_scorer.score(attack, response_text)
                     scores.append(scored.score)
                     rationale = scored.rationale
+                    signals = scored.signals
 
                 # Run judge evaluation if available (enriches results)
                 if adversarial_judge:
@@ -149,6 +151,8 @@ class AdversarialEvaluationModule(BaseEvaluationModule):
                 "response": response_text,
                 "rationale": rationale,
             }
+            if signals:
+                result["signals"] = signals
             if judge_result:
                 result["judge_result"] = judge_result
             results.append(result)
@@ -184,6 +188,7 @@ class AdversarialEvaluationModule(BaseEvaluationModule):
                     "content_snippet": _truncate(rec["content"]),
                     "response_snippet": _truncate(rec.get("response", "")),
                     "score_rationale": rec.get("rationale", ""),
+                    "signals": rec.get("signals"),
                     "judge_result": rec.get("judge_result"),
                 }
                 for rec in top_failing

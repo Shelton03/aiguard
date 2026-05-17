@@ -13,6 +13,7 @@ from .scoring import ScoreBundle, clamp
 from .taxonomy import HallucinationCategory, HallucinationSource
 from .judge import Judge
 from config.judge_config import JudgeConfig
+from adversarial.language_detection import detect_language
 
 
 @dataclass
@@ -62,17 +63,17 @@ class HallucinationTest:
         response = test_case.get("response", "")
         reasoning_parts = []
 
+        response_lang = detect_language(response)
+
         if mode == HallucinationMode.GROUND_TRUTH:
             bundle, reasoning = evaluate_against_ground_truth(response, test_case.get("ground_truth", ""))
         elif mode == HallucinationMode.CONTEXT_GROUNDED:
             bundle, reasoning = evaluate_against_context(response, test_case.get("context_documents", []))
         else:
-            bundle, reasoning = evaluate_self_consistency(response)
-            # In monitoring mode, avoid extra passes; in evaluation mode, optionally blend uncertainty
+            bundle, reasoning = evaluate_self_consistency(response, target_lang=response_lang)
         reasoning_parts.append(reasoning)
 
-        # Always run lightweight uncertainty estimator to enrich signals (no extra latency)
-        unc_bundle, unc_reason = estimate_uncertainty(response)
+        unc_bundle, unc_reason = estimate_uncertainty(response, target_lang=response_lang)
         reasoning_parts.append(unc_reason)
 
         merged = self._merge_scores(bundle, unc_bundle)
@@ -91,6 +92,7 @@ class HallucinationTest:
             "family": family,
             "subtype": subtype,
             "source": HallucinationSource.UNKNOWN.value,
+            "language_detected": response_lang,
         }
 
         if self._judge is not None:
@@ -108,6 +110,7 @@ class HallucinationTest:
                     else "faithfulness",
                     "subtype": decision.subtype.value,
                     "source": decision.source.value,
+                    "language_detected": response_lang,
                     "judge_label": decision.label,
                     "judge_confidence": decision.confidence,
                     "judge_rationale": decision.rationale,

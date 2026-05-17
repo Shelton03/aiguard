@@ -212,7 +212,7 @@ class EvaluationWorker:
             "forget everything": "instruction_override",
         }
         heuristic_subtypes = sorted({subtype_map.get(hit, "instruction_override") for hit in hits})
-        heuristic_score = min(1.0, len(hits) * 0.35)
+        heuristic_score = min(1.0, len(hits) * 0.2)
         heuristic_label = "injection_detected" if heuristic_score > 0.0 else "safe"
 
         heuristic_explanation = (
