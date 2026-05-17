@@ -10,6 +10,10 @@ import logging
 
 from adversarial import AttackStorage, load_datasets, load_default_dataset
 from adversarial.scoring import HeuristicScorer, ResponseHeuristicScorer
+try:
+    from adversarial.judge import AdversarialJudge
+except ImportError:
+    AdversarialJudge = None
 from hallucination.hallucination_test import HallucinationTest
 from config.judge_config import load_judge_config
 
@@ -90,10 +94,19 @@ class AdversarialEvaluationModule(BaseEvaluationModule):
 
         static_scorer = HeuristicScorer()
         response_scorer = ResponseHeuristicScorer()
+
+        # Initialize adversarial judge if enabled
+        judge_cfg = load_judge_config(Path(self.root_dir))
+        adversarial_judge = None
+        if judge_cfg.enabled and AdversarialJudge is not None:
+            adversarial_judge = AdversarialJudge(judge_cfg)
+            logger.info("Adversarial: LLM judge enabled (model=%s)", judge_cfg.model)
+
         results: List[Dict[str, Any]] = []
         for idx, attack in enumerate(attacks, start=1):
             response_text = ""
             rationale = ""
+            judge_result = None
             if model_client:
                 scores = []
                 for _ in range(runs_per_test):
@@ -102,21 +115,43 @@ class AdversarialEvaluationModule(BaseEvaluationModule):
                     scored = response_scorer.score(attack, response_text)
                     scores.append(scored.score)
                     rationale = scored.rationale
+
+                # Run judge evaluation if available (enriches results)
+                if adversarial_judge:
+                    try:
+                        judge_decision = adversarial_judge.evaluate(
+                            prompt=attack.content,
+                            response=response_text,
+                        )
+                        if judge_decision is not None:
+                            judge_result = {
+                                "label": judge_decision.label,
+                                "attack_type": judge_decision.attack_type.value if judge_decision.attack_type else None,
+                                "subtype": judge_decision.subtype,
+                                "severity": judge_decision.severity,
+                                "confidence": judge_decision.confidence,
+                                "rationale": judge_decision.rationale,
+                            }
+                            # Enrich rationale with judge feedback
+                            rationale = f"{rationale} [Judge: {judge_decision.label} ({judge_decision.severity})]"
+                    except Exception:
+                        logger.warning("Adversarial: judge failed for attack %s", attack.attack_id)
             else:
                 scores = [static_scorer(attack).score for _ in range(runs_per_test)]
             avg_score = sum(scores) / len(scores)
-            results.append(
-                {
-                    "attack_id": attack.attack_id,
-                    "attack_type": attack.attack_type.value,
-                    "subtype": attack.subtype,
-                    "category": f"{attack.attack_type.value}/{attack.subtype or 'unspecified'}",
-                    "avg_score": avg_score,
-                    "content": attack.content,
-                    "response": response_text,
-                    "rationale": rationale,
-                }
-            )
+            result = {
+                "attack_id": attack.attack_id,
+                "attack_type": attack.attack_type.value,
+                "subtype": attack.subtype,
+                "category": f"{attack.attack_type.value}/{attack.subtype or 'unspecified'}",
+                "avg_score": avg_score,
+                "content": attack.content,
+                "response": response_text,
+                "rationale": rationale,
+            }
+            if judge_result:
+                result["judge_result"] = judge_result
+            results.append(result)
             if idx % 10 == 0 or idx == len(attacks):
                 logger.info("Adversarial: evaluated %d/%d", idx, len(attacks))
 
@@ -149,6 +184,7 @@ class AdversarialEvaluationModule(BaseEvaluationModule):
                     "content_snippet": _truncate(rec["content"]),
                     "response_snippet": _truncate(rec.get("response", "")),
                     "score_rationale": rec.get("rationale", ""),
+                    "judge_result": rec.get("judge_result"),
                 }
                 for rec in top_failing
             ],

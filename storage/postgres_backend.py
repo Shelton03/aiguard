@@ -114,20 +114,10 @@ class PostgresBackend(BaseBackend):
             cur = conn.cursor()
             for stmt in TABLES:
                 cur.execute(stmt)
-            self._ensure_eval_metadata_column(cur)
+            cur.execute(
+                "ALTER TABLE evaluation_results ADD COLUMN IF NOT EXISTS metadata JSONB"
+            )
             conn.commit()
-
-    def _ensure_eval_metadata_column(self, cur) -> None:
-        cur.execute(
-            """
-            SELECT 1
-            FROM information_schema.columns
-            WHERE table_name = 'evaluation_results'
-              AND column_name = 'metadata'
-            """
-        )
-        if cur.fetchone() is None:
-            cur.execute("ALTER TABLE evaluation_results ADD COLUMN metadata JSONB")
 
     def save_test_case(self, project: str, case: TestCase) -> None:
         with self._connect() as conn:
@@ -263,15 +253,6 @@ class PostgresBackend(BaseBackend):
             )
             conn.commit()
 
-    def delete_evaluations_for_trace(self, project: str, trace_id: str, module: str) -> None:
-        with self._connect() as conn:
-            cur = conn.cursor()
-            cur.execute(
-                "DELETE FROM evaluation_results WHERE project=%s AND trace_id=%s AND module=%s",
-                (project, trace_id, module),
-            )
-            conn.commit()
-
     def get_evaluations(self, project: str, limit: int = 100) -> List[EvaluationResultRecord]:
         with self._connect() as conn:
             cur = conn.cursor()
@@ -297,6 +278,21 @@ class PostgresBackend(BaseBackend):
                 )
                 for r in rows
             ]
+
+    def delete_evaluations(self, project: str, trace_id: str, module: str | None = None) -> None:
+        with self._connect() as conn:
+            cur = conn.cursor()
+            if module:
+                cur.execute(
+                    "DELETE FROM evaluation_results WHERE project=%s AND trace_id=%s AND module=%s",
+                    (project, trace_id, module),
+                )
+            else:
+                cur.execute(
+                    "DELETE FROM evaluation_results WHERE project=%s AND trace_id=%s",
+                    (project, trace_id),
+                )
+            conn.commit()
 
     def register_dataset(self, project: str, dataset: DatasetRegistry) -> None:
         with self._connect() as conn:
@@ -394,8 +390,8 @@ class PostgresBackend(BaseBackend):
                     category=row["category"],
                     risk_level=row["risk_level"],
                     confidence=float(row["confidence"]),
-                    created_at=row["created_at"],
                     metadata=row.get("metadata") or {},
+                    created_at=row["created_at"],
                 ),
             )
         for row in payload.get("review_labels", []):

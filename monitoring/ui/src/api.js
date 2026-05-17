@@ -6,10 +6,8 @@ export const api = {
   // Traces
   getTraces: (params = {}) => axios.get(`${BASE}/traces`, { params }).then((r) => r.data),
   getTrace: (id) => axios.get(`${BASE}/traces/${id}`).then((r) => r.data),
-  evaluateTrace: (id, forceJudge = false) =>
-    axios
-      .post(`${BASE}/traces/${id}/evaluate`, null, { params: { force_judge: forceJudge } })
-      .then((r) => r.data),
+  rejudgeTrace: (id, forceJudge = false) =>
+    axios.post(`${BASE}/traces/${id}/evaluate`, null, { params: { force_judge: forceJudge } }).then((r) => r.data),
 
   // Metrics
   getHallucinationRate: (windowHours = 24) =>

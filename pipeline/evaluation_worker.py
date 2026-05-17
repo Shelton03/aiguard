@@ -23,6 +23,11 @@ from pipeline.event_models import (
 from storage.manager import StorageManager
 from storage.models import EvaluationResultRecord, Trace
 
+try:
+    from adversarial.judge import AdversarialJudge
+except ImportError:
+    AdversarialJudge = None
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -73,13 +78,21 @@ class EvaluationWorker:
         # Lazy-import heavy evaluation modules so startup is fast even when
         # the optional extras are absent.
         self._hallucination_test = None  # initialised on first use
+        self._adversarial_judge = None  # lazy-initialized
+
+        # Initialize adversarial judge if enabled
+        if config.enable_adversarial_eval and config.judge.enabled and AdversarialJudge is not None:
+            self._adversarial_judge = AdversarialJudge(config.judge)
 
     # ------------------------------------------------------------------
     # Public interface
     # ------------------------------------------------------------------
 
     def process_batch(
-        self, traces: List[TraceCreatedEvent]
+        self,
+        traces: List[TraceCreatedEvent],
+        *,
+        force_judge: bool = False,
     ) -> List[TraceEvaluatedEvent]:
         """Evaluate *traces* and return one :class:`TraceEvaluatedEvent` per trace.
 
@@ -93,7 +106,7 @@ class EvaluationWorker:
 
         for event in traces:
             try:
-                evaluated = self._evaluate_trace(event)
+                evaluated = self._evaluate_trace(event, force_judge=force_judge)
                 results.append(evaluated)
             except Exception:
                 logger.exception(
@@ -112,11 +125,11 @@ class EvaluationWorker:
     # Internal
     # ------------------------------------------------------------------
 
-    def _evaluate_trace(self, event: TraceCreatedEvent) -> TraceEvaluatedEvent:
+    def _evaluate_trace(self, event: TraceCreatedEvent, *, force_judge: bool = False) -> TraceEvaluatedEvent:
         bundle = EvaluationBundle()
 
         if self._config.enable_hallucination_eval:
-            bundle.hallucination = self._run_hallucination(event)
+            bundle.hallucination = self._run_hallucination(event, force_judge=force_judge)
 
         if self._config.enable_adversarial_eval:
             bundle.adversarial = self._run_adversarial(event)
@@ -130,12 +143,17 @@ class EvaluationWorker:
 
     # ---- Hallucination -----------------------------------------------
 
-    def _run_hallucination(self, event: TraceCreatedEvent) -> ModuleEvaluationResult:
+    def _run_hallucination(
+        self, event: TraceCreatedEvent, *, force_judge: bool = False
+    ) -> ModuleEvaluationResult:
         from hallucination.hallucination_test import HallucinationTest  # lazy
 
-        if self._hallucination_test is None:
+        enable_judge = bool(self._config.judge.enabled or force_judge)
+        if self._hallucination_test is None or (
+            force_judge and not self._hallucination_test.enable_judge
+        ):
             self._hallucination_test = HallucinationTest(
-                enable_judge=bool(self._config.judge.enabled),
+                enable_judge=enable_judge,
                 judge_config=self._config.judge,
             )
 
@@ -165,14 +183,15 @@ class EvaluationWorker:
     # ---- Adversarial --------------------------------------------------
 
     def _run_adversarial(self, event: TraceCreatedEvent) -> ModuleEvaluationResult:
-        """Minimal adversarial heuristic — checks for common injection patterns.
+        """Adversarial evaluation using heuristic patterns and optionally LLM judge.
 
-        A full adversarial evaluation would use :class:`~adversarial.attack_storage.AttackStorage`
-        and compare against stored attack seeds.  This lightweight version
-        applies a basic rule-based check to avoid adding heavy optional
-        dependencies to the monitoring path.
+        Runs heuristic pattern check first, then enriches with LLM judge if enabled.
+        Falls back to heuristic-only if judge fails.
         """
-        prompt = _prompt_from_messages(event.input_messages).lower()
+        prompt = _prompt_from_messages(event.input_messages)
+        prompt_lower = prompt.lower()
+
+        # Run heuristic patterns (always runs)
         injection_patterns = [
             "ignore previous instructions",
             "ignore all previous",
@@ -182,7 +201,7 @@ class EvaluationWorker:
             "system prompt:",
             "forget everything",
         ]
-        hits = [p for p in injection_patterns if p in prompt]
+        hits = [p for p in injection_patterns if p in prompt_lower]
         subtype_map = {
             "ignore previous instructions": "instruction_override",
             "ignore all previous": "instruction_override",
@@ -192,25 +211,77 @@ class EvaluationWorker:
             "system prompt:": "system_prompt_exfiltration",
             "forget everything": "instruction_override",
         }
-        subtypes = sorted({subtype_map.get(hit, "instruction_override") for hit in hits})
-        score = min(1.0, len(hits) * 0.35)
-        label = "injection_detected" if score > 0.0 else "safe"
-        explanation = (
+        heuristic_subtypes = sorted({subtype_map.get(hit, "instruction_override") for hit in hits})
+        heuristic_score = min(1.0, len(hits) * 0.35)
+        heuristic_label = "injection_detected" if heuristic_score > 0.0 else "safe"
+
+        heuristic_explanation = (
             f"Found {len(hits)} injection pattern(s): {', '.join(hits)}"
             if hits
             else "No common injection patterns detected."
         )
+
+        # Default result (heuristic-only)
+        label = heuristic_label
+        score = heuristic_score
+        confidence = 0.75 if hits else 0.90
+        explanation = heuristic_explanation
+        raw = {
+            "patterns_found": hits,
+            "score": score,
+            "category": "prompt_injection" if hits else "safe",
+            "subtypes": heuristic_subtypes,
+            "heuristic_only": True,
+        }
+
+        # Enrich with LLM judge if available
+        if self._adversarial_judge is not None:
+            try:
+                judge_decision = self._adversarial_judge.evaluate(
+                    prompt=prompt,
+                    response=event.output_text,
+                )
+                if judge_decision is not None:
+                    # Override with judge results (enrichment)
+                    label = judge_decision.label
+                    # Blend scores: use heuristic as base, weight judge
+                    score = (heuristic_score * 0.4 + (1.0 if judge_decision.label == "injection_detected" else 0.0) * 0.6)
+                    score = min(1.0, score)
+                    confidence = judge_decision.confidence
+
+                    # Build enriched explanation
+                    judge_part = f" [Judge: {judge_decision.attack_type.value}/{judge_decision.subtype} ({judge_decision.severity})]"
+                    explanation = heuristic_explanation + judge_part
+
+                    # Update raw with judge info
+                    raw = {
+                        "patterns_found": hits,
+                        "score": score,
+                        "category": judge_decision.attack_type.value if judge_decision.attack_type else "unknown",
+                        "subtypes": [judge_decision.subtype] + heuristic_subtypes if judge_decision.subtype != "unknown" else heuristic_subtypes,
+                        "heuristic_only": False,
+                        "judge": {
+                            "label": judge_decision.label,
+                            "attack_type": judge_decision.attack_type.value if judge_decision.attack_type else None,
+                            "subtype": judge_decision.subtype,
+                            "severity": judge_decision.severity,
+                            "confidence": judge_decision.confidence,
+                            "rationale": judge_decision.rationale,
+                        },
+                    }
+            except Exception:
+                # Judge failed, fallback to heuristic-only
+                logger.warning(
+                    "EvaluationWorker: adversarial judge failed for trace %s, falling back to heuristic",
+                    event.trace_id,
+                )
+
         return ModuleEvaluationResult(
             label=label,
             score=score,
-            confidence=0.75 if hits else 0.90,
+            confidence=confidence,
             explanation=explanation,
-            raw={
-                "patterns_found": hits,
-                "score": score,
-                "category": "prompt_injection" if hits else "safe",
-                "subtypes": subtypes,
-            },
+            raw=raw,
         )
 
     # ---- Persistence -------------------------------------------------
@@ -252,13 +323,12 @@ class EvaluationWorker:
             r = bundle.hallucination
             raw = r.raw or {}
             try:
-                self._storage.delete_evaluations_for_trace(event.trace_id, "hallucination")
+                self._storage.delete_evaluations(event.trace_id, "hallucination")
             except Exception:
                 logger.exception(
-                    "EvaluationWorker: failed to clear prior hallucination eval for %s",
+                    "EvaluationWorker: failed to clear hallucination eval for %s",
                     event.trace_id,
                 )
-            meta = {**(raw.get("metadata") or {}), "explanation": r.explanation}
             rec = EvaluationResultRecord(
                 id=str(uuid.uuid4()),
                 trace_id=event.trace_id,
@@ -270,8 +340,8 @@ class EvaluationWorker:
                 category=raw.get("category", "unknown"),
                 risk_level=r.label,
                 confidence=r.confidence,
+                metadata=raw.get("metadata", {}),
                 created_at=now,
-                metadata=meta,
             )
             try:
                 self._storage.save_evaluation(rec)
@@ -284,13 +354,12 @@ class EvaluationWorker:
         if bundle.adversarial is not None:
             r = bundle.adversarial
             try:
-                self._storage.delete_evaluations_for_trace(event.trace_id, "adversarial")
+                self._storage.delete_evaluations(event.trace_id, "adversarial")
             except Exception:
                 logger.exception(
-                    "EvaluationWorker: failed to clear prior adversarial eval for %s",
+                    "EvaluationWorker: failed to clear adversarial eval for %s",
                     event.trace_id,
                 )
-            meta = {**(r.raw or {}), "explanation": r.explanation}
             rec = EvaluationResultRecord(
                 id=str(uuid.uuid4()),
                 trace_id=event.trace_id,
@@ -302,8 +371,8 @@ class EvaluationWorker:
                 category="prompt_injection",
                 risk_level=r.label,
                 confidence=r.confidence,
+                metadata=r.raw or {},
                 created_at=now,
-                metadata=meta,
             )
             try:
                 self._storage.save_evaluation(rec)

@@ -62,6 +62,20 @@ export default function TraceDetail() {
       .finally(() => setLoading(false))
   }, [traceId])
 
+  const handleRejudge = async () => {
+    setRejudgeError(null)
+    setRejudgeLoading(true)
+    try {
+      await api.rejudgeTrace(traceId, true)
+      const refreshed = await api.getTrace(traceId)
+      setTrace(refreshed)
+    } catch (e) {
+      setRejudgeError(e.message)
+    } finally {
+      setRejudgeLoading(false)
+    }
+  }
+
   if (loading) return <p className="text-gray-400 py-16 text-center">Loading…</p>
   if (error)
     return (
@@ -71,20 +85,6 @@ export default function TraceDetail() {
     )
   if (!trace) return <p className="text-gray-400">Trace not found.</p>
 
-  const handleForceJudge = async () => {
-    setRejudgeLoading(true)
-    setRejudgeError(null)
-    try {
-      await api.evaluateTrace(traceId, true)
-      const refreshed = await api.getTrace(traceId)
-      setTrace(refreshed)
-    } catch (e) {
-      setRejudgeError(e.message || 'Failed to trigger judge evaluation.')
-    } finally {
-      setRejudgeLoading(false)
-    }
-  }
-
   return (
     <div className="space-y-6">
       {/* Back link */}
@@ -92,21 +92,21 @@ export default function TraceDetail() {
         ← Back to traces
       </Link>
 
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-1">
           <h1 className="text-xl font-bold text-gray-800 font-mono break-all">{trace.id}</h1>
           <p className="text-sm text-gray-500">
             Full trace record including prompt, model response, and evaluation signals.
           </p>
         </div>
-        <div className="flex flex-col items-start gap-2 md:items-end">
+        <div className="flex flex-col items-start gap-2">
           <button
             type="button"
-            onClick={handleForceJudge}
+            onClick={handleRejudge}
             disabled={rejudgeLoading}
-            className="text-sm font-semibold px-3 py-2 rounded-lg border border-brand-200 text-brand-700 hover:bg-brand-50 disabled:opacity-60"
+            className="inline-flex items-center gap-2 rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-xs font-semibold text-brand-700 hover:bg-brand-100 disabled:opacity-60"
           >
-            {rejudgeLoading ? 'Running judge…' : 'Force judge evaluation'}
+            {rejudgeLoading ? 'Re-evaluating…' : 'Force judge re-evaluation'}
           </button>
           {rejudgeError && <span className="text-xs text-red-500">{rejudgeError}</span>}
         </div>
@@ -215,7 +215,8 @@ export default function TraceDetail() {
                       />
                     )}
                     {ev.metadata?.taxonomy?.judge_rationale && (
-                      <div className="text-[11px] text-slate-500 leading-relaxed pt-1">
+                      <div className="rounded-md bg-white/60 px-2 py-1 text-[11px] text-slate-600">
+                        <span className="font-semibold text-slate-500">Judge rationale:</span>{' '}
                         {ev.metadata.taxonomy.judge_rationale}
                       </div>
                     )}

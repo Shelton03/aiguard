@@ -18,6 +18,40 @@ class AttackType(str, Enum):
     OTHER = "other"
 
 
+class PromptInjectionSubtype(str, Enum):
+    """Subtypes for prompt injection attacks."""
+
+    INSTRUCTION_OVERRIDE = "instruction_override"
+    ROLEPLAY_OVERRIDE = "roleplay_override"
+    SYSTEM_PROMPT_EXFILTRATION = "system_prompt_exfiltration"
+    CONTEXT_POISONING = "context_poisoning"
+
+
+class JailbreakSubtype(str, Enum):
+    """Subtypes for jailbreak attacks."""
+
+    ROLE_PLAY = "role_play"
+    HYPOTHETICAL = "hypothetical"
+    AUTHORIZATION_BYPASS = "authorization_bypass"
+    TOKEN_SMUGGLING = "token_smuggling"
+
+
+class PIIExfiltrationSubtype(str, Enum):
+    """Subtypes for PII exfiltration attacks."""
+
+    DATA_EXTRACTION = "data_extraction"
+    PERSONA_EXTRACTION = "persona_extraction"
+    CONTEXT_LEAK = "context_leak"
+
+
+class PolicyOverrideSubtype(str, Enum):
+    """Subtypes for policy override attacks."""
+
+    SYSTEM_PROMPT_OVERRIDE = "system_prompt_override"
+    ROLE_OVERRIDE = "role_override"
+    CAPABILITY_EXPANSION = "capability_expansion"
+
+
 class GenerationType(str, Enum):
     """How an attack was produced."""
 

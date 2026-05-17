@@ -37,7 +37,12 @@ class BaseBackend(ABC):
         ...
 
     @abstractmethod
-    def delete_evaluations_for_trace(self, project: str, trace_id: str, module: str) -> None:
+    def delete_evaluations(
+        self,
+        project: str,
+        trace_id: str,
+        module: str | None = None,
+    ) -> None:
         ...
 
     @abstractmethod

@@ -190,12 +190,18 @@ class SQLiteBackend(BaseBackend):
                 ),
             )
 
-    def delete_evaluations_for_trace(self, project: str, trace_id: str, module: str) -> None:
+    def delete_evaluations(self, project: str, trace_id: str, module: str | None = None) -> None:
         with self._connect() as conn:
-            conn.execute(
-                "DELETE FROM evaluation_results WHERE project = ? AND trace_id = ? AND module = ?",
-                (project, trace_id, module),
-            )
+            if module:
+                conn.execute(
+                    "DELETE FROM evaluation_results WHERE project = ? AND trace_id = ? AND module = ?",
+                    (project, trace_id, module),
+                )
+            else:
+                conn.execute(
+                    "DELETE FROM evaluation_results WHERE project = ? AND trace_id = ?",
+                    (project, trace_id),
+                )
 
     def get_evaluations(self, project: str, limit: int = 100) -> List[EvaluationResultRecord]:
         with self._connect() as conn:
@@ -305,8 +311,8 @@ class SQLiteBackend(BaseBackend):
                     category=row["category"],
                     risk_level=row["risk_level"],
                     confidence=row["confidence"],
-                    created_at=datetime.fromisoformat(row["created_at"]),
                     metadata=json.loads(row.get("metadata") or "{}"),
+                    created_at=datetime.fromisoformat(row["created_at"]),
                 ),
             )
         for row in payload.get("review_labels", []):

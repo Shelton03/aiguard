@@ -85,6 +85,16 @@ monitoring:
 
 review:
     port: 8000
+    base_url: "http://localhost:8000"  # Used for email review links
+
+smtp:
+    host: "smtp.gmail.com"
+    port: 587
+    user: ""              # SMTP username
+    password: ""          # Or use env var: AIGUARD_SMTP_PASSWORD
+    from: "alerts@example.com"
+    to: "reviewer@example.com"
+    use_tls: true
 
 judge:
     enabled: false
