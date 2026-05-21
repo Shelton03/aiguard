@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, List, Optional, TYPE_CHECKING
 import time
 import uuid
@@ -62,7 +62,7 @@ class ExecutionRunner:
             end_time=end,
             metadata={},
         )
-        return ExecutionTrace(trace_id=trace_id, steps=[step], created_at=datetime.utcnow(), metadata=metadata)
+        return ExecutionTrace(trace_id=trace_id, steps=[step], created_at=_utcnow(), metadata=metadata)
 
     def run_multi_turn(self, inputs: List[Any], metadata: Optional[dict] = None) -> ExecutionTrace:
         trace_id = str(uuid.uuid4())
@@ -84,4 +84,8 @@ class ExecutionRunner:
                 )
             )
 
-        return ExecutionTrace(trace_id=trace_id, steps=steps, created_at=datetime.utcnow(), metadata=metadata)
+        return ExecutionTrace(trace_id=trace_id, steps=steps, created_at=_utcnow(), metadata=metadata)
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)

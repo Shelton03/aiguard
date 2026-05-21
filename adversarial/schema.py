@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class AttackType(str, Enum):
@@ -61,6 +61,10 @@ class GenerationType(str, Enum):
     RUNTIME_DISCOVERED = "runtime_discovered"
 
 
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
 @dataclass
 class AttackMetadata:
     """Metadata describing context for an attack."""
@@ -105,7 +109,7 @@ class Attack:
     success_criteria: Dict[str, Any]
     metadata: AttackMetadata = field(default_factory=AttackMetadata)
     generation_type: GenerationType = GenerationType.SEED
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=_utcnow)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -135,5 +139,5 @@ class Attack:
             generation_type=GenerationType(data.get("generation_type", GenerationType.SEED.value)),
             created_at=datetime.fromisoformat(data.get("created_at"))
             if data.get("created_at")
-            else datetime.utcnow(),
+            else _utcnow(),
         )

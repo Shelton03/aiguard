@@ -12,7 +12,7 @@ Example env vars::
     AIGUARD_SMTP_USER=alerts@example.com
     AIGUARD_SMTP_PASSWORD=secretpassword
     AIGUARD_SMTP_FROM=alerts@example.com
-    AIGUARD_SMTP_TO=reviewer@example.com
+    AIGUARD_SMTP_TO=reviewer1@example.com,reviewer2@example.com
     AIGUARD_SMTP_USE_TLS=true
     AIGUARD_REVIEW_BASE_URL=http://localhost:8000
 """
@@ -26,7 +26,8 @@ from dataclasses import dataclass, field
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
+import threading
 
 try:
     import tomllib  # Python 3.11+
@@ -51,7 +52,7 @@ class SMTPConfig:
     user: Optional[str] = None
     password: Optional[str] = None
     from_addr: str = "aiguard@localhost"
-    to_addr: str = "reviewer@localhost"
+    to_addrs: List[str] = field(default_factory=lambda: ["reviewer@localhost"])
     use_tls: bool = False
     base_url: str = "http://localhost:8000"
 
@@ -61,11 +62,43 @@ def _env_bool(key: str, default: bool = False) -> bool:
     return val in ("1", "true", "yes") if val else default
 
 
+def _parse_recipients(value: object | None) -> List[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [part.strip() for part in value.split(",") if part.strip()]
+    if isinstance(value, (list, tuple)):
+        recipients: List[str] = []
+        for item in value:
+            if isinstance(item, str):
+                recipients.extend(
+                    [part.strip() for part in item.split(",") if part.strip()]
+                )
+        return recipients
+    return []
+
+
+_rr_lock = threading.Lock()
+_rr_index = 0
+
+
+def _choose_recipient(recipients: List[str]) -> str:
+    if not recipients:
+        return "reviewer@localhost"
+    if len(recipients) == 1:
+        return recipients[0]
+    global _rr_index
+    with _rr_lock:
+        idx = _rr_index % len(recipients)
+        _rr_index += 1
+    return recipients[idx]
+
+
 def load_smtp_config(root: Optional[Path] = None) -> SMTPConfig:
     """Load SMTP config; env overrides file overrides defaults."""
     cfg = SMTPConfig()
 
-    # --- File config ---
+    # --- File config (TOML) ---
     root = root or Path.cwd()
     candidates = [
         root / ".aiguard" / "review_config.toml",
@@ -83,12 +116,36 @@ def load_smtp_config(root: Optional[Path] = None) -> SMTPConfig:
                     cfg.user = smtp_section.get("user", cfg.user)
                     cfg.password = smtp_section.get("password", cfg.password)
                     cfg.from_addr = smtp_section.get("from", cfg.from_addr)
-                    cfg.to_addr = smtp_section.get("to", cfg.to_addr)
+                    to_addrs = _parse_recipients(smtp_section.get("to"))
+                    if to_addrs:
+                        cfg.to_addrs = to_addrs
                     cfg.use_tls = bool(smtp_section.get("use_tls", cfg.use_tls))
                     cfg.base_url = data.get("review", {}).get("base_url", cfg.base_url)
                     break
                 except Exception as exc:  # pragma: no cover
                     logger.warning("Could not parse SMTP config file %s: %s", candidate, exc)
+
+    # --- File config (YAML) ---
+    yaml_path = root / "aiguard.yaml"
+    if yaml_path.exists():
+        try:
+            import yaml  # type: ignore[import]
+
+            with yaml_path.open() as fh:
+                data = yaml.safe_load(fh) or {}
+            smtp_section = data.get("smtp", {}) or {}
+            cfg.host = smtp_section.get("host", cfg.host)
+            cfg.port = int(smtp_section.get("port", cfg.port))
+            cfg.user = smtp_section.get("user", cfg.user)
+            cfg.password = smtp_section.get("password", cfg.password)
+            cfg.from_addr = smtp_section.get("from", cfg.from_addr)
+            to_addrs = _parse_recipients(smtp_section.get("to"))
+            if to_addrs:
+                cfg.to_addrs = to_addrs
+            cfg.use_tls = bool(smtp_section.get("use_tls", cfg.use_tls))
+            cfg.base_url = (data.get("review", {}) or {}).get("base_url", cfg.base_url)
+        except Exception as exc:  # pragma: no cover
+            logger.warning("Could not parse YAML config file %s: %s", yaml_path, exc)
 
     # --- Env overrides (always win) ---
     cfg.host = os.getenv("AIGUARD_SMTP_HOST", cfg.host)
@@ -96,7 +153,10 @@ def load_smtp_config(root: Optional[Path] = None) -> SMTPConfig:
     cfg.user = os.getenv("AIGUARD_SMTP_USER", cfg.user)
     cfg.password = os.getenv("AIGUARD_SMTP_PASSWORD", cfg.password)
     cfg.from_addr = os.getenv("AIGUARD_SMTP_FROM", cfg.from_addr)
-    cfg.to_addr = os.getenv("AIGUARD_SMTP_TO", cfg.to_addr)
+    env_to = os.getenv("AIGUARD_SMTP_TO")
+    env_addrs = _parse_recipients(env_to)
+    if env_addrs:
+        cfg.to_addrs = env_addrs
     cfg.use_tls = _env_bool("AIGUARD_SMTP_USE_TLS", cfg.use_tls)
     cfg.base_url = os.getenv("AIGUARD_REVIEW_BASE_URL", cfg.base_url).rstrip("/")
 
@@ -117,6 +177,7 @@ def _build_review_email(
     raw_score: float,
     token: str,
     cfg: SMTPConfig,
+    recipient: str,
 ) -> MIMEMultipart:
     review_url = (
         f"{cfg.base_url}/project/{project}/review/{token}"
@@ -169,7 +230,7 @@ Do not forward this email.
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
     msg["From"] = cfg.from_addr
-    msg["To"] = cfg.to_addr
+    msg["To"] = recipient
     msg.attach(MIMEText(text_body, "plain"))
     msg.attach(MIMEText(html_body, "html"))
     return msg
@@ -197,6 +258,7 @@ class Emailer:
         token: str,
     ) -> None:
         """Build and dispatch the review-alert email."""
+        recipient = _choose_recipient(self.cfg.to_addrs)
         msg = _build_review_email(
             project=project,
             item_id=item_id,
@@ -205,12 +267,13 @@ class Emailer:
             raw_score=raw_score,
             token=token,
             cfg=self.cfg,
+            recipient=recipient,
         )
         try:
-            self._send(msg)
+            self._send(msg, recipient)
             logger.info(
                 "Review alert sent to %s for project=%s item=%s",
-                self.cfg.to_addr,
+                recipient,
                 project,
                 item_id,
             )
@@ -218,7 +281,7 @@ class Emailer:
             logger.error("Failed to send review alert: %s", exc)
             raise
 
-    def _send(self, msg: MIMEMultipart) -> None:
+    def _send(self, msg: MIMEMultipart, recipient: str) -> None:
         if self.cfg.use_tls:
             context = ssl.create_default_context()
             with smtplib.SMTP(self.cfg.host, self.cfg.port) as server:
@@ -226,9 +289,9 @@ class Emailer:
                 server.starttls(context=context)
                 if self.cfg.user and self.cfg.password:
                     server.login(self.cfg.user, self.cfg.password)
-                server.sendmail(self.cfg.from_addr, self.cfg.to_addr, msg.as_string())
+                server.sendmail(self.cfg.from_addr, [recipient], msg.as_string())
         else:
             with smtplib.SMTP(self.cfg.host, self.cfg.port) as server:
                 if self.cfg.user and self.cfg.password:
                     server.login(self.cfg.user, self.cfg.password)
-                server.sendmail(self.cfg.from_addr, self.cfg.to_addr, msg.as_string())
+                server.sendmail(self.cfg.from_addr, [recipient], msg.as_string())

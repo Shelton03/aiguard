@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, Optional
 
@@ -32,7 +32,7 @@ class ReviewQueueItem:
     trigger_reason: str
     status: ReviewStatus = ReviewStatus.PENDING
     review_token: str = ""           # secure random token (set on creation)
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     completed_at: Optional[datetime] = None
 
 
@@ -45,7 +45,7 @@ class ReviewLabel:
     project_name: str
     decision: ReviewDecision
     notes: Optional[str]
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
 
 @dataclass

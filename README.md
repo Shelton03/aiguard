@@ -754,7 +754,7 @@ Backend-agnostic persistence layer scoped per project. SQLite by default; Postgr
 ```python
 from storage.manager import StorageManager
 from storage.models import Trace, EvaluationResultRecord
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import uuid4
 
 sm = StorageManager()               # auto-detects project from CWD / aiguard.yaml
@@ -765,7 +765,7 @@ sm.save_trace(Trace(
     input_payload="...",
     output_payload="...",
     latency_ms=310,
-    timestamp=datetime.utcnow(),
+    timestamp=datetime.now(timezone.utc),
     metadata={},
 ))
 results = sm.get_evaluations(limit=50)
@@ -876,7 +876,7 @@ AIGUARD_SMTP_PORT=587
 AIGUARD_SMTP_USER=alerts@example.com
 AIGUARD_SMTP_PASSWORD=secret
 AIGUARD_SMTP_FROM=alerts@example.com
-AIGUARD_SMTP_TO=reviewer@example.com
+AIGUARD_SMTP_TO=reviewer1@example.com,reviewer2@example.com
 AIGUARD_SMTP_USE_TLS=true
 AIGUARD_REVIEW_BASE_URL=https://review.example.com
 ```
@@ -890,7 +890,7 @@ port     = 587
 user     = "alerts@example.com"
 password = "secret"
 from     = "alerts@example.com"
-to       = "reviewer@example.com"
+to       = ["reviewer1@example.com", "reviewer2@example.com"]
 use_tls  = true
 
 [review]

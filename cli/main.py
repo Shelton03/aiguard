@@ -93,7 +93,9 @@ smtp:
     user: ""              # SMTP username
     password: ""          # Or use env var: AIGUARD_SMTP_PASSWORD
     from: "alerts@example.com"
-    to: "reviewer@example.com"
+    to:
+        - "reviewer1@example.com"
+        - "reviewer2@example.com"
     use_tls: true
 
 judge:
