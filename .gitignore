@@ -13,6 +13,9 @@ aiguard_env/
 venv/
 env/
 
+#SESSION_OBJECTS
+STEP_BY_STEP_GUIDE.md
+
 # Generated at build time — not stored in git
 adversarial/data/default_adversarial_dataset.jsonl
 
