@@ -93,5 +93,27 @@ class TestHallucinationModule(unittest.TestCase):
         self.assertLessEqual(out["scores"]["overall_risk"], 1.0)
 
 
+class TestStorageModels(unittest.TestCase):
+    def test_evaluation_result_record_dataclass(self) -> None:
+        from datetime import datetime, timezone
+
+        from storage.models import EvaluationResultRecord
+
+        record = EvaluationResultRecord(
+            id="r1",
+            trace_id="t1",
+            test_case_id="",
+            module="hallucination",
+            mode="context_grounded",
+            execution_mode="evaluation",
+            scores={"overall_risk": 0.1},
+            category="faithfulness/context_inconsistency",
+            risk_level="safe",
+            confidence=0.9,
+            created_at=datetime.now(timezone.utc),
+        )
+        self.assertEqual(record.id, "r1")
+
+
 if __name__ == "__main__":
     unittest.main()
