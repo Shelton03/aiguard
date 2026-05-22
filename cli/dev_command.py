@@ -3,7 +3,7 @@
 Launches concurrently:
 - The evaluation pipeline (trace queue + batch scheduler)
 - The monitoring API server (FastAPI on port 8080)
-- The React UI dev server (Vite on port 3000)
+- The React UI preview server (Vite on port 3000)
 
 Usage::
 
@@ -12,15 +12,16 @@ Usage::
 from __future__ import annotations
 
 import subprocess
-import sys
 import threading
 import time
 from pathlib import Path
+import socket
 
 import typer
 
 from config.pipeline_config import load_pipeline_config
 from click.core import ParameterSource
+from cli.monitor_command import _start_ui_preview
 
 dev_app = typer.Typer(
     name="dev",
@@ -33,9 +34,9 @@ dev_app = typer.Typer(
 def dev_start(
     ctx: typer.Context,
     api_port: int = typer.Option(8080, "--api-port", help="Monitoring API port"),
-    ui_port: int = typer.Option(3000, "--ui-port", help="React UI dev server port"),
+    ui_port: int = typer.Option(3000, "--ui-port", help="Monitoring UI port"),
 ) -> None:
-    """Start pipeline + monitoring API + React UI dev server."""
+    """Start pipeline + monitoring API + React UI preview server."""
     if ctx.invoked_subcommand is not None:
         return
 
@@ -45,7 +46,16 @@ def dev_start(
     if ctx.get_parameter_source("ui_port") == ParameterSource.DEFAULT:
         ui_port = config.ui_port
 
+    requested_api_port = api_port
+    requested_ui_port = ui_port
+    api_port = _pick_available_port(api_port, "0.0.0.0")
+    ui_port = _pick_available_port(ui_port, "127.0.0.1")
+
     typer.echo("✦ AIGuard Dev Environment")
+    if api_port != requested_api_port:
+        typer.echo(f"  [api] port {requested_api_port} in use, using {api_port}")
+    if ui_port != requested_ui_port:
+        typer.echo(f"  [ui] port {requested_ui_port} in use, using {ui_port}")
     typer.echo(f"  Dashboard   →  http://localhost:{ui_port}")
     typer.echo(f"  API         →  http://localhost:{api_port}/docs")
     typer.echo("")
@@ -94,32 +104,10 @@ def dev_start(
     t.start()
     threads.append(t)
 
-    # ---- React UI dev server --------------------------------------------
-    ui_dir = Path(__file__).resolve().parents[2] / "monitoring" / "ui"
-    if ui_dir.exists() and (ui_dir / "package.json").exists():
-        npm_cmd = "npm" if sys.platform != "win32" else "npm.cmd"
-        if not (ui_dir / "node_modules").exists():
-            typer.echo("  [ui] installing dependencies…")
-            try:
-                subprocess.run([npm_cmd, "install"], cwd=str(ui_dir), check=False)
-            except FileNotFoundError:
-                typer.echo("  [ui] npm not found — skipping React dev server", err=True)
-                npm_cmd = None
-        try:
-            if npm_cmd:
-                proc = subprocess.Popen(
-                    [npm_cmd, "run", "dev", "--", "--port", str(ui_port)],
-                    cwd=str(ui_dir),
-                )
-                procs.append(proc)
-                typer.echo(f"  [ui] dev server starting on port {ui_port}")
-        except FileNotFoundError:
-            typer.echo("  [ui] npm not found — skipping React dev server", err=True)
-    else:
-        typer.echo(
-            "  [ui] monitoring/ui not built yet — run `npm install && npm run build` inside monitoring/ui/",
-            err=True,
-        )
+    # ---- React UI preview server ----------------------------------------
+    ui_proc = _start_ui_preview(ui_port)
+    if ui_proc is not None:
+        procs.append(ui_proc)
 
     typer.echo("\nAll services started.  Press Ctrl+C to stop.\n")
 
@@ -130,3 +118,21 @@ def dev_start(
         typer.echo("\nShutting down…")
         for proc in procs:
             proc.terminate()
+
+
+def _is_port_available(port: int, host: str) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        try:
+            sock.bind((host, port))
+        except OSError:
+            return False
+    return True
+
+
+def _pick_available_port(port: int, host: str, max_tries: int = 20) -> int:
+    candidate = port
+    for _ in range(max_tries):
+        if _is_port_available(candidate, host):
+            return candidate
+        candidate += 1
+    return port
