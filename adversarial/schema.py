@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
+import hashlib
 from typing import Any, Dict, Optional
 from datetime import datetime, timezone
 
@@ -63,6 +64,27 @@ class GenerationType(str, Enum):
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _normalize_content(content: str) -> str:
+    return " ".join(str(content).split())
+
+
+def resolve_attack_id(
+    attack_id: Optional[object],
+    source_dataset: str,
+    attack_type: AttackType | str | None,
+    subtype: Optional[str],
+    content: str,
+) -> str:
+    if attack_id:
+        return str(attack_id)
+    attack_type_value = attack_type.value if isinstance(attack_type, AttackType) else (str(attack_type) if attack_type else "")
+    subtype_value = subtype or ""
+    normalized_content = _normalize_content(content)
+    payload = f"{source_dataset}|{attack_type_value}|{subtype_value}|{normalized_content}"
+    digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    return f"hash:{digest}"
 
 
 @dataclass

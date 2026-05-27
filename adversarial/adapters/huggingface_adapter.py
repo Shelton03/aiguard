@@ -3,11 +3,9 @@ from __future__ import annotations
 
 import json
 from typing import Iterable, Mapping, Optional
-from uuid import uuid4
-
 from .base_adapter import BaseDatasetAdapter
 from .registry import register_adapter
-from ..schema import Attack, AttackMetadata, AttackType, GenerationType
+from ..schema import Attack, AttackMetadata, AttackType, GenerationType, resolve_attack_id
 
 
 @register_adapter("huggingface")
@@ -99,7 +97,13 @@ class HuggingFaceAdapter(BaseDatasetAdapter):
             )
 
             yield Attack(
-                attack_id=str(record.get(mapping.get("id", "id")) or uuid4()),
+                attack_id=resolve_attack_id(
+                    record.get(mapping.get("id", "id")),
+                    source_dataset=self.name,
+                    attack_type=attack_type,
+                    subtype=subtype,
+                    content=content,
+                ),
                 source_dataset=self.name,
                 attack_type=attack_type,
                 subtype=subtype,

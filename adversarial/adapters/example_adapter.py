@@ -3,11 +3,9 @@ from __future__ import annotations
 
 import json
 from typing import Iterable
-from uuid import uuid4
-
 from .base_adapter import BaseDatasetAdapter
 from .registry import register_adapter
-from ..schema import Attack, AttackMetadata, AttackType, GenerationType
+from ..schema import Attack, AttackMetadata, AttackType, GenerationType, resolve_attack_id
 
 
 @register_adapter("json_list")
@@ -71,7 +69,13 @@ class JsonListAdapter(BaseDatasetAdapter):
                     attack_type = AttackType.PROMPT_INJECTION
 
             yield Attack(
-                attack_id=str(entry.get("id") or uuid4()),
+                attack_id=resolve_attack_id(
+                    entry.get("id"),
+                    source_dataset=self.name,
+                    attack_type=attack_type,
+                    subtype=entry.get("subtype"),
+                    content=content,
+                ),
                 source_dataset=self.name,
                 attack_type=attack_type,
                 subtype=entry.get("subtype"),

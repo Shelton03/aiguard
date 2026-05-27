@@ -5,11 +5,9 @@ import csv
 import json
 from pathlib import Path
 from typing import Iterable, Mapping, Optional
-from uuid import uuid4
-
 from .base_adapter import BaseDatasetAdapter
 from .registry import register_adapter
-from ..schema import Attack, AttackMetadata, AttackType, GenerationType
+from ..schema import Attack, AttackMetadata, AttackType, GenerationType, resolve_attack_id
 
 
 @register_adapter("csv")
@@ -62,7 +60,13 @@ class CsvAdapter(BaseDatasetAdapter):
                 )
 
                 yield Attack(
-                    attack_id=str(row.get(mapping.get("id", "id")) or uuid4()),
+                    attack_id=resolve_attack_id(
+                        row.get(mapping.get("id", "id")),
+                        source_dataset=self.name,
+                        attack_type=attack_type,
+                        subtype=subtype,
+                        content=content,
+                    ),
                     source_dataset=self.name,
                     attack_type=attack_type,
                     subtype=subtype,

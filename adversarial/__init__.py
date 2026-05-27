@@ -11,8 +11,7 @@ from .adapters import csv_adapter  # noqa: F401
 from .adapters import huggingface_adapter  # noqa: F401
 from .mutator import DEFAULT_OPERATORS, MutationEngine, MutationOperator
 from .storage import AttackStorage
-from .schema import Attack, GenerationType, AttackType, AttackMetadata
-from uuid import uuid4
+from .schema import Attack, GenerationType, AttackType, AttackMetadata, resolve_attack_id
 from .seed_manager import SeedManager
 from .evolutionary import EvolutionaryEngine, EvolutionConfig
 from .scoring import HeuristicScorer
@@ -109,13 +108,20 @@ def load_default_dataset(storage: Optional[AttackStorage] = None) -> int:
                 except Exception:
                     attack_type = AttackType.PROMPT_INJECTION
 
+            content = obj.get("prompt", "")
             attacks.append(
                 Attack(
-                    attack_id=str(obj.get("id") or uuid4()),
+                    attack_id=resolve_attack_id(
+                        obj.get("id"),
+                        source_dataset="aiguard-default",
+                        attack_type=attack_type,
+                        subtype=None,
+                        content=content,
+                    ),
                     source_dataset="aiguard-default",
                     attack_type=attack_type,
                     subtype=None,
-                    content=obj.get("prompt", ""),
+                    content=content,
                     severity="medium",
                     success_criteria={},
                     metadata=AttackMetadata(dataset_version="builtin"),
