@@ -121,8 +121,6 @@ class Judge:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": json.dumps(user_payload)},
             ],
-            "temperature": self._config.temperature,
-            "max_tokens": self._config.max_tokens,
         }
 
     def _post(self, payload: Dict[str, Any]) -> Optional[str]:

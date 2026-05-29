@@ -17,8 +17,6 @@ class JudgeConfig:
     model: str = "llama3.1:8b"
     api_key_env: Optional[str] = None
     timeout_s: float = 8.0
-    max_tokens: int = 256
-    temperature: float = 0.0
 
     def resolve_api_key(self) -> Optional[str]:
         if not self.api_key_env:
@@ -46,8 +44,6 @@ def load_judge_config(root: Optional[Path] = None) -> JudgeConfig:
             model=str(judge_section.get("model", "llama3.1:8b")),
             api_key_env=judge_section.get("api_key_env"),
             timeout_s=float(judge_section.get("timeout_s", 8.0)),
-            max_tokens=int(judge_section.get("max_tokens", 256)),
-            temperature=float(judge_section.get("temperature", 0.0)),
         )
     except Exception:
         return JudgeConfig()

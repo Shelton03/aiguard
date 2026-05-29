@@ -1004,8 +1004,6 @@ judge:
   endpoint: http://localhost:11434/v1
   model: llama3.1:8b
   timeout_s: 8.0
-  max_tokens: 256
-  temperature: 0.0
 
 sdk:
   provider: litellm
@@ -1170,7 +1168,7 @@ Pass it to `MutationEngine([..., SynonymMutation()])`.
 - **Local-first** — SQLite by default; no cloud dependency to run evaluations.
 - **Thin CLI** — zero business logic in the CLI; all logic lives in modules.
 - **Module-agnostic registry** — adding a new evaluation module requires no CLI edits.
-- **Deterministic CI** — `runs_per_test=3` averaging, temperature=0 for judge, locked thresholds.
+- **Deterministic CI** — `runs_per_test=3` averaging, locked thresholds.
 - **Clean separation** — ingestion ↔ storage ↔ mutation ↔ evaluation ↔ review are independent layers.
 - **No auth in v1** — token-based access; pluggable auth is a planned v2 addition.
 

@@ -97,8 +97,6 @@ def load_pipeline_config(
                 model=str(judge_section.get("model", judge_config.model)),
                 api_key_env=judge_section.get("api_key_env", judge_config.api_key_env),
                 timeout_s=float(judge_section.get("timeout_s", judge_config.timeout_s)),
-                max_tokens=int(judge_section.get("max_tokens", judge_config.max_tokens)),
-                temperature=float(judge_section.get("temperature", judge_config.temperature)),
             )
 
         except Exception:

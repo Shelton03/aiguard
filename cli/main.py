@@ -104,8 +104,6 @@ judge:
     endpoint: http://localhost:11434/v1
     model: llama3.1:8b
     timeout_s: 8.0
-    max_tokens: 256
-    temperature: 0.0
 
 pipeline:
     evaluation_batch_interval_hours: 3
