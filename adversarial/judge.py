@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -65,6 +66,11 @@ class AdversarialJudge:
             rationale=str(parsed.get("rationale", "")),
         )
 
+    def warm_up(self) -> bool:
+        payload = self._build_payload("Warm-up ping", "")
+        raw = self._post(payload)
+        return bool(raw)
+
     def _build_payload(
         self,
         prompt: str,
@@ -121,12 +127,18 @@ class AdversarialJudge:
             headers["Authorization"] = f"Bearer {api_key}"
 
         req = urllib.request.Request(endpoint, data=data, headers=headers, method="POST")
-        try:
-            with urllib.request.urlopen(req, timeout=self._config.timeout_s) as resp:
-                body = resp.read().decode("utf-8")
-        except urllib.error.HTTPError:
-            return None
-        except Exception:
+        for attempt, delay in enumerate([0, 5, 10, 15]):
+            if attempt:
+                time.sleep(delay)
+            try:
+                with urllib.request.urlopen(req, timeout=self._config.timeout_s) as resp:
+                    body = resp.read().decode("utf-8")
+                break
+            except urllib.error.HTTPError:
+                body = None
+            except Exception:
+                body = None
+        if not body:
             return None
 
         try:

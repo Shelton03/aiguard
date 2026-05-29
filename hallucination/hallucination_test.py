@@ -139,6 +139,11 @@ class HallucinationTest:
             },
         )
 
+    def warm_up_judge(self) -> bool:
+        if self._judge is None:
+            return False
+        return self._judge.warm_up()
+
     def _merge_scores(self, primary: ScoreBundle, uncertainty: ScoreBundle) -> ScoreBundle:
         return ScoreBundle(
             factual_score=primary.factual_score,

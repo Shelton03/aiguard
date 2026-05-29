@@ -101,6 +101,12 @@ class AdversarialEvaluationModule(BaseEvaluationModule):
         if judge_cfg.enabled and AdversarialJudge is not None:
             adversarial_judge = AdversarialJudge(judge_cfg)
             logger.info("Adversarial: LLM judge enabled (model=%s)", judge_cfg.model)
+            try:
+                logger.info("Adversarial: warming up judge")
+                if not adversarial_judge.warm_up():
+                    logger.warning("Adversarial: judge warm-up returned no response")
+            except Exception:
+                logger.warning("Adversarial: judge warm-up failed")
 
         results: List[Dict[str, Any]] = []
         for idx, attack in enumerate(attacks, start=1):
@@ -263,6 +269,13 @@ class HallucinationEvaluationModule(BaseEvaluationModule):
             enable_judge=bool(judge_cfg.enabled),
             judge_config=judge_cfg,
         )
+        if judge_cfg.enabled:
+            try:
+                logger.info("Hallucination: warming up judge")
+                if not evaluator.warm_up_judge():
+                    logger.warning("Hallucination: judge warm-up returned no response")
+            except Exception:
+                logger.warning("Hallucination: judge warm-up failed")
         results: List[Dict[str, Any]] = []
         logger.info("Hallucination: running %d test cases", len(test_cases))
         for idx, case in enumerate(test_cases, start=1):

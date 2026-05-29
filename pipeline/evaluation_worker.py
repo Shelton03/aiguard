@@ -22,6 +22,7 @@ from pipeline.event_models import (
 )
 from storage.manager import StorageManager
 from storage.models import EvaluationResultRecord, Trace
+from config.judge_config import JudgeConfig
 
 try:
     from adversarial.judge import AdversarialJudge
@@ -102,6 +103,7 @@ class EvaluationWorker:
             return []
 
         logger.info("EvaluationWorker: starting batch of %d traces.", len(traces))
+        self._warm_up_judges(force_judge=force_judge)
         results: List[TraceEvaluatedEvent] = []
 
         for event in traces:
@@ -140,6 +142,33 @@ class EvaluationWorker:
             project_id=event.project_id,
             evaluation=bundle,
         )
+
+    def _warm_up_judges(self, *, force_judge: bool = False) -> None:
+        judge_cfg: JudgeConfig = self._config.judge
+        if not judge_cfg.enabled and not force_judge:
+            return
+        if self._config.enable_adversarial_eval and self._adversarial_judge is not None:
+            try:
+                logger.info("EvaluationWorker: warming up adversarial judge")
+                if not self._adversarial_judge.warm_up():
+                    logger.warning("EvaluationWorker: adversarial judge warm-up returned no response")
+            except Exception:
+                logger.warning("EvaluationWorker: adversarial judge warm-up failed")
+        if self._config.enable_hallucination_eval:
+            from hallucination.hallucination_test import HallucinationTest
+
+            if self._hallucination_test is None or force_judge:
+                self._hallucination_test = HallucinationTest(
+                    enable_judge=True,
+                    judge_config=judge_cfg,
+                )
+            if self._hallucination_test is not None:
+                try:
+                    logger.info("EvaluationWorker: warming up hallucination judge")
+                    if not self._hallucination_test.warm_up_judge():
+                        logger.warning("EvaluationWorker: hallucination judge warm-up returned no response")
+                except Exception:
+                    logger.warning("EvaluationWorker: hallucination judge warm-up failed")
 
     # ---- Hallucination -----------------------------------------------
 
