@@ -20,7 +20,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install build tools
-        run: pip install build langdetect
+        run: pip install build langdetect datasets
 
       - name: Build default adversarial dataset (English only)
         run: python adversarial/data/build_default_dataset.py
