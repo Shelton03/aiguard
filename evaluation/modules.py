@@ -133,15 +133,14 @@ class AdversarialEvaluationModule(BaseEvaluationModule):
                         )
                         if judge_decision is not None:
                             judge_result = {
-                                "label": judge_decision.label,
-                                "attack_type": judge_decision.attack_type.value if judge_decision.attack_type else None,
-                                "subtype": judge_decision.subtype,
-                                "severity": judge_decision.severity,
-                                "confidence": judge_decision.confidence,
-                                "rationale": judge_decision.rationale,
+                                "classification": judge_decision.classification,
+                                "compliance": judge_decision.compliance,
+                                "risk": judge_decision.risk,
                             }
                             # Enrich rationale with judge feedback
-                            rationale = f"{rationale} [Judge: {judge_decision.label} ({judge_decision.severity})]"
+                            rationale = (
+                                f"{rationale} [Judge: {judge_decision.label} ({judge_decision.severity})]"
+                            )
                     except Exception:
                         logger.warning("Adversarial: judge failed for attack %s", attack.attack_id)
             else:

@@ -274,12 +274,16 @@ class EvaluationWorker:
                     # Override with judge results (enrichment)
                     label = judge_decision.label
                     # Blend scores: use heuristic as base, weight judge
-                    score = (heuristic_score * 0.4 + (1.0 if judge_decision.label == "injection_detected" else 0.0) * 0.6)
+                    judge_signal = 1.0 if judge_decision.detected else 0.0
+                    score = (heuristic_score * 0.4 + judge_signal * 0.6)
                     score = min(1.0, score)
                     confidence = judge_decision.confidence
 
                     # Build enriched explanation
-                    judge_part = f" [Judge: {judge_decision.attack_type.value}/{judge_decision.subtype} ({judge_decision.severity})]"
+                    judge_part = (
+                        f" [Judge: {judge_decision.attack_type.value}/"
+                        f"{judge_decision.subtype} ({judge_decision.severity})]"
+                    )
                     explanation = heuristic_explanation + judge_part
 
                     # Update raw with judge info
@@ -290,12 +294,9 @@ class EvaluationWorker:
                         "subtypes": [judge_decision.subtype] + heuristic_subtypes if judge_decision.subtype != "unknown" else heuristic_subtypes,
                         "heuristic_only": False,
                         "judge": {
-                            "label": judge_decision.label,
-                            "attack_type": judge_decision.attack_type.value if judge_decision.attack_type else None,
-                            "subtype": judge_decision.subtype,
-                            "severity": judge_decision.severity,
-                            "confidence": judge_decision.confidence,
-                            "rationale": judge_decision.rationale,
+                            "classification": judge_decision.classification,
+                            "compliance": judge_decision.compliance,
+                            "risk": judge_decision.risk,
                         },
                     }
             except Exception:

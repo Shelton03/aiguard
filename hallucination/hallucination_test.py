@@ -111,9 +111,11 @@ class HallucinationTest:
                     "subtype": decision.subtype.value,
                     "source": decision.source.value,
                     "language_detected": response_lang,
-                    "judge_label": decision.label,
-                    "judge_confidence": decision.confidence,
-                    "judge_rationale": decision.rationale,
+                    "judge": {
+                        "classification": decision.classification,
+                        "compliance": decision.compliance,
+                        "risk": decision.risk,
+                    },
                 }
         confidence = merged.confidence
 
