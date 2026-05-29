@@ -142,13 +142,37 @@ class AdversarialJudge:
     def _parse_json(self, text: str) -> Optional[Dict[str, Any]]:
         if not text:
             return None
-        match = re.search(r"\{.*\}", text, re.DOTALL)
+        cleaned = text.strip()
+        if cleaned.startswith("```"):
+            cleaned = cleaned.strip("`")
+            cleaned = cleaned.replace("json\n", "", 1).replace("JSON\n", "", 1).strip()
+        parsed = self._try_parse_json(cleaned)
+        if parsed is not None:
+            return parsed
+        match = re.search(r"\{.*\}", cleaned, re.DOTALL)
         if not match:
             return None
+        return self._try_parse_json(match.group(0))
+
+    def _try_parse_json(self, payload: str) -> Optional[Dict[str, Any]]:
         try:
-            return json.loads(match.group(0))
+            parsed = json.loads(payload)
         except Exception:
             return None
+        if isinstance(parsed, list):
+            if not parsed:
+                return None
+            parsed = parsed[0]
+        if isinstance(parsed, dict):
+            return {
+                "label": parsed.get("label", "unknown"),
+                "attack_type": parsed.get("attack_type", "other"),
+                "subtype": parsed.get("subtype", "unknown"),
+                "severity": parsed.get("severity", "medium"),
+                "confidence": parsed.get("confidence", 0.5),
+                "rationale": parsed.get("rationale", ""),
+            }
+        return None
 
     def _coerce_attack_type(self, value: Any) -> AttackType:
         if isinstance(value, str):
