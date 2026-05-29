@@ -15,9 +15,12 @@ from pathlib import Path
 from typing import Iterable, List, Dict, Any, Optional
 
 from datasets import load_dataset
+from langdetect import DetectorFactory, detect
 
 ROOT = Path(__file__).parent
 OUT = ROOT / "default_adversarial_dataset.jsonl"
+
+DetectorFactory.seed = 0
 
 # Provided datasets (owner/name)
 DATASETS = [
@@ -61,6 +64,16 @@ DATASET_ATTACK_TYPE: Dict[str, str] = {
 
 def normalize_whitespace(s: str) -> str:
     return re.sub(r"\s+", " ", s).strip()
+
+
+def is_english(text: str) -> bool:
+    sample = normalize_whitespace(text)[:1000]
+    if not sample:
+        return False
+    try:
+        return detect(sample) == "en"
+    except Exception:
+        return False
 
 
 def find_prompt_field(record: Dict[str, Any]) -> Optional[str]:
@@ -113,6 +126,8 @@ def process_dataset(ds_id: str) -> Iterable[Dict[str, Any]]:
             continue
         prompt = normalize_whitespace(prompt)
         if not prompt:
+            continue
+        if not is_english(prompt):
             continue
         label = find_label(rec)
         if label:
