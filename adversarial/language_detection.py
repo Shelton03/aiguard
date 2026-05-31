@@ -92,16 +92,16 @@ SUPPORTED_LANGUAGES = {"en", "fr", "it", "es", "de"}
 
 
 def detect_language(text: str) -> str:
-    """Detect language of text, return ISO code. Default 'en' on failure."""
+    """Detect language of text, return ISO code. Default 'unknown' on failure."""
     if detect is None:
-        return "en"
+        return "unknown"
     if not text or len(text.strip()) < 10:
-        return "en"
+        return "unknown"
     try:
         lang = detect(text[:200])
-        return lang if lang in SUPPORTED_LANGUAGES else "en"
+        return lang if lang in SUPPORTED_LANGUAGES else "unknown"
     except (LangDetectException, Exception):
-        return "en"
+        return "unknown"
 
 
 def get_refusal_keywords(language: str = "en") -> List[str]:

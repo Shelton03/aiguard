@@ -473,6 +473,12 @@ For full judge reasoning, keep the judge model local and point `judge.endpoint` 
 
 `hallucination_test_cases.json`
 
+Generate a starter test case file:
+
+```bash
+aiguard evaluate hallucination init-test-cases --output hallucination_test_cases.json
+```
+
 ```json
 [
   {
@@ -489,6 +495,8 @@ For full judge reasoning, keep the judge model local and point `judge.endpoint` 
 ```
 
 If you don’t want hallucination checks, remove `hallucination` from `evaluation.enabled_modules`.
+
+CLI adversarial evaluations filter to English-only prompts. Non-English (or unknown) attacks are skipped and the run fails if none remain.
 
 **System prompt template** (`prompt_template.py`)
 

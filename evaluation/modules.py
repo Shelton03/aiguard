@@ -10,6 +10,7 @@ import logging
 
 from adversarial import AttackStorage, load_datasets, load_default_dataset
 from adversarial.scoring import HeuristicScorer, ResponseHeuristicScorer
+from adversarial.language_detection import detect_language
 try:
     from adversarial.judge import AdversarialJudge
 except ImportError:
@@ -87,10 +88,10 @@ class AdversarialEvaluationModule(BaseEvaluationModule):
 
         logger.info("Adversarial: loaded %d attacks", len(attacks))
 
+        quick_limit: int | None = None
         if self.mode == "quick":
-            limit = int(module_cfg.get("quick_limit", 20))
-            attacks = attacks[:limit]
-            logger.info("Adversarial: quick mode enabled (limit=%d)", limit)
+            quick_limit = int(module_cfg.get("quick_limit", 20))
+            logger.info("Adversarial: quick mode enabled (limit=%d)", quick_limit)
 
         static_scorer = HeuristicScorer()
         response_scorer = ResponseHeuristicScorer()
@@ -109,11 +110,23 @@ class AdversarialEvaluationModule(BaseEvaluationModule):
                 logger.warning("Adversarial: judge warm-up failed")
 
         results: List[Dict[str, Any]] = []
+        skipped_non_english = 0
+        evaluated = 0
         for idx, attack in enumerate(attacks, start=1):
+            detected_lang = detect_language(attack.content)
+            if detected_lang != "en":
+                skipped_non_english += 1
+                logger.info(
+                    "Adversarial: skipping non-English attack %s (language=%s)",
+                    attack.attack_id,
+                    detected_lang,
+                )
+                continue
             response_text = ""
             rationale = ""
             judge_result = None
             signals = None
+            evaluated += 1
             if model_client:
                 scores = []
                 for _ in range(runs_per_test):
@@ -161,8 +174,22 @@ class AdversarialEvaluationModule(BaseEvaluationModule):
             if judge_result:
                 result["judge_result"] = judge_result
             results.append(result)
-            if idx % 10 == 0 or idx == len(attacks):
-                logger.info("Adversarial: evaluated %d/%d", idx, len(attacks))
+            if quick_limit is not None and evaluated >= quick_limit:
+                logger.info("Adversarial: quick mode limit reached (%d)", quick_limit)
+                break
+            if evaluated and (evaluated % 10 == 0 or idx == len(attacks)):
+                logger.info(
+                    "Adversarial: evaluated %d (skipped=%d, seen=%d)",
+                    evaluated,
+                    skipped_non_english,
+                    idx,
+                )
+
+        if not results:
+            self._error = _ModuleError(
+                "No English attacks available after language filtering"
+            )
+            return
 
         total = len(results)
         failed = [r for r in results if r["avg_score"] >= float(threshold)]
@@ -183,6 +210,7 @@ class AdversarialEvaluationModule(BaseEvaluationModule):
             "threshold": float(threshold),
             "status": "fail" if global_risk >= float(threshold) else "pass",
             "failure_breakdown_by_category": failure_breakdown,
+            "skipped_non_english": skipped_non_english,
             "top_failing_examples": [
                 {
                     "attack_id": rec["attack_id"],

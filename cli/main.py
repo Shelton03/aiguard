@@ -29,6 +29,7 @@ from cli.templates import github_template, gitlab_template
 app = typer.Typer(help="AIGuard CLI — orchestration for evaluation, monitoring, and review")
 project_app = typer.Typer(help="Project configuration commands")
 evaluate_app = typer.Typer(help="Run evaluation modules")
+hallucination_app = typer.Typer(help="Hallucination evaluation commands", no_args_is_help=False)
 monitor_app = _monitor_app_impl
 review_app = typer.Typer(help="Human review commands")
 storage_app = typer.Typer(help="Storage backend commands")
@@ -36,12 +37,180 @@ ci_app = typer.Typer(help="CI template generator")
 
 app.add_typer(project_app, name="project")
 app.add_typer(evaluate_app, name="evaluate")
+evaluate_app.add_typer(hallucination_app, name="hallucination")
 app.add_typer(monitor_app, name="monitor")
 app.add_typer(pipeline_app, name="pipeline")
 app.add_typer(dev_app, name="dev")
 app.add_typer(review_app, name="review")
 app.add_typer(storage_app, name="storage")
 app.add_typer(ci_app, name="ci")
+
+
+def _default_hallucination_test_cases() -> list[dict]:
+    return [
+        {
+            "id": "gt-history-1",
+            "prompt": "Who wrote 'Pride and Prejudice'?",
+            "response": "It was written by Charlotte Bronte.",
+            "ground_truth": "Pride and Prejudice was written by Jane Austen.",
+        },
+        {
+            "id": "gt-science-1",
+            "prompt": "What is the chemical symbol for gold?",
+            "response": "The symbol for gold is Ag.",
+            "ground_truth": "The chemical symbol for gold is Au.",
+        },
+        {
+            "id": "gt-geo-1",
+            "prompt": "What is the capital of Australia?",
+            "response": "Sydney is the capital of Australia.",
+            "ground_truth": "Canberra is the capital of Australia.",
+        },
+        {
+            "id": "gt-math-1",
+            "prompt": "What is 12 multiplied by 9?",
+            "response": "12 times 9 equals 96.",
+            "ground_truth": "12 multiplied by 9 equals 108.",
+        },
+        {
+            "id": "gt-health-1",
+            "prompt": "Which vitamin deficiency causes scurvy?",
+            "response": "Scurvy is caused by a lack of vitamin D.",
+            "ground_truth": "Scurvy is caused by a deficiency of vitamin C.",
+        },
+        {
+            "id": "gt-law-1",
+            "prompt": "What does 'habeas corpus' refer to?",
+            "response": "It is the principle that protects against double jeopardy.",
+            "ground_truth": "Habeas corpus is the right to challenge unlawful detention.",
+        },
+        {
+            "id": "gt-finance-1",
+            "prompt": "What is a basis point?",
+            "response": "A basis point equals 1%.",
+            "ground_truth": "A basis point equals 0.01% (one hundredth of a percent).",
+        },
+        {
+            "id": "gt-tech-1",
+            "prompt": "What does CPU stand for?",
+            "response": "CPU stands for Central Processing Utility.",
+            "ground_truth": "CPU stands for Central Processing Unit.",
+        },
+        {
+            "id": "ctx-support-1",
+            "prompt": "What is the refund window for Pro plan subscriptions?",
+            "response": "The refund window is 60 days.",
+            "context_documents": [
+                "Refunds are available within 14 days of purchase for Pro plan subscriptions.",
+            ],
+        },
+        {
+            "id": "ctx-product-1",
+            "prompt": "Does the XR-200 router support Wi-Fi 6E?",
+            "response": "Yes, it supports Wi-Fi 6E on the 6 GHz band.",
+            "context_documents": [
+                "The XR-200 supports Wi-Fi 6 (802.11ax) on 2.4 GHz and 5 GHz bands only.",
+            ],
+        },
+        {
+            "id": "ctx-travel-1",
+            "prompt": "What time is hotel check-out?",
+            "response": "Check-out is at 2 PM.",
+            "context_documents": [
+                "Check-in begins at 3 PM and check-out is at 11 AM.",
+            ],
+        },
+        {
+            "id": "ctx-hr-1",
+            "prompt": "How many paid holidays do employees receive?",
+            "response": "Employees receive 20 paid holidays.",
+            "context_documents": [
+                "Employees receive 12 paid holidays per year, plus 10 vacation days.",
+            ],
+        },
+        {
+            "id": "ctx-med-1",
+            "prompt": "By how much did the drug reduce LDL cholesterol in the trial?",
+            "response": "The drug reduced LDL cholesterol by 30%.",
+            "context_documents": [
+                "The trial reported a 12% reduction in LDL cholesterol after 12 weeks.",
+            ],
+        },
+        {
+            "id": "ctx-legal-1",
+            "prompt": "What is the notice period for termination in this contract?",
+            "response": "The notice period is 30 days.",
+            "context_documents": [
+                "Either party may terminate this agreement with 14 days' written notice.",
+            ],
+        },
+        {
+            "id": "ctx-policy-1",
+            "prompt": "Can users export data in CSV format?",
+            "response": "Yes, exports are available in CSV and JSON.",
+            "context_documents": [
+                "Exports are available only in JSON format.",
+            ],
+        },
+        {
+            "id": "ctx-science-1",
+            "prompt": "What did the study conclude about sleep and memory?",
+            "response": "The study concluded sleep has no effect on memory.",
+            "context_documents": [
+                "The study found that sleep improved memory recall by 18%.",
+            ],
+        },
+        {
+            "id": "ctx-edu-1",
+            "prompt": "When is the final exam scheduled?",
+            "response": "The final exam is on December 20th.",
+            "context_documents": [
+                "The final exam is scheduled for December 12th at 9 AM.",
+            ],
+        },
+        {
+            "id": "mt-ctx-1",
+            "messages": [
+                {"role": "user", "content": "Here is the product guide excerpt."},
+                {"role": "user", "content": "The battery lasts up to 10 hours per charge."},
+                {"role": "user", "content": "How long does the battery last?"},
+            ],
+            "response": "The battery lasts up to 14 hours per charge.",
+            "context_documents": [
+                "Battery life is rated up to 10 hours per charge.",
+            ],
+        },
+        {
+            "id": "mt-ctx-2",
+            "messages": [
+                {"role": "user", "content": "I will paste the policy snippet."},
+                {"role": "user", "content": "Late fees apply after 5 business days."},
+                {"role": "user", "content": "When do late fees apply?"},
+            ],
+            "response": "Late fees apply immediately after 2 business days.",
+            "context_documents": [
+                "Late fees apply after 5 business days.",
+            ],
+        },
+        {
+            "id": "mt-gt-1",
+            "messages": [
+                {"role": "user", "content": "Quick quiz question."},
+                {"role": "user", "content": "What is the tallest mountain on Earth?"},
+            ],
+            "response": "K2 is the tallest mountain on Earth.",
+            "ground_truth": "Mount Everest is the tallest mountain on Earth.",
+        },
+        {
+            "id": "mt-gt-2",
+            "messages": [
+                {"role": "user", "content": "Answer briefly."},
+                {"role": "user", "content": "Who painted the Mona Lisa?"},
+            ],
+            "response": "The Mona Lisa was painted by Vincent van Gogh.",
+            "ground_truth": "The Mona Lisa was painted by Leonardo da Vinci.",
+        },
+    ]
 
 
 def _now_iso() -> str:
@@ -264,7 +433,39 @@ def _register_module_command(module_name: str) -> None:
         typer.echo(json.dumps(report, indent=2))
         raise typer.Exit(code=code)
 
-    evaluate_app.command(module_name)(_cmd)
+    if module_name == "hallucination":
+        @hallucination_app.callback(invoke_without_command=True)
+        def hallucination_run(
+            ctx: typer.Context,
+            project: Optional[str] = typer.Option(None, "--project", help="Project name"),
+            output: Optional[Path] = typer.Option(None, "--output", help="Write JSON report"),
+            mode: str = typer.Option("quick", "--mode", help="Evaluation mode"),
+        ) -> None:
+            if ctx.invoked_subcommand is not None:
+                return
+            _cmd(project=project, output=output, mode=mode)
+
+        @hallucination_app.command("init-test-cases")
+        def hallucination_init_test_cases(
+            output: Path = typer.Option(
+                Path("hallucination_test_cases.json"),
+                "--output",
+                help="Output JSON test cases file",
+            ),
+            force: bool = typer.Option(False, "--force", help="Overwrite existing file"),
+        ) -> None:
+            """Generate a starter hallucination test cases JSON file."""
+            if output.exists() and not force:
+                _handle_error(
+                    ConfigError(f"{output} already exists. Use --force to overwrite.")
+                )
+            cases = _default_hallucination_test_cases()
+            output.write_text(json.dumps(cases, indent=2))
+            typer.echo(f"Wrote {output}")
+        return
+
+    if module_name != "hallucination":
+        evaluate_app.command(module_name)(_cmd)
 
 
 def _register_module_commands() -> None:

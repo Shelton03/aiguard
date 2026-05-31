@@ -156,6 +156,12 @@ evaluation:
 
 `test_cases` can also be a JSON file path (e.g. hallucination_test_cases.json).
 
+Generate a starter hallucination test case file:
+
+```bash
+aiguard evaluate hallucination init-test-cases --output hallucination_test_cases.json
+```
+
 `prompt_template.py` should define a `PROMPT` constant (plain text is also accepted in .txt/.md files):
 
 ```python
@@ -187,6 +193,9 @@ aiguard evaluate --project econet_llm_eval
 
 # Run a single module
 aiguard evaluate adversarial --project econet_llm_eval
+```
+
+CLI adversarial evaluations only run English attacks; non-English (or unknown) prompts are skipped.
 
 # Write JSON artifact
 aiguard evaluate adversarial --project econet_llm_eval --output report.json
