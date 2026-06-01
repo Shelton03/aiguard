@@ -18,7 +18,7 @@ from .queue import ReviewQueue
 # Constants
 # ---------------------------------------------------------------------------
 
-_VERSION = "0.2.0"
+_VERSION = "0.7.0"
 
 # Base directory of this package — templates and static are relative to it
 _PKG_DIR = Path(__file__).parent

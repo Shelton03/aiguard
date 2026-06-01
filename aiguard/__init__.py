@@ -16,7 +16,7 @@ Usage
 """
 from __future__ import annotations
 
-__version__ = "0.2.0"
+__version__ = "0.7.0"
 
 # SDK public surface — imported lazily to avoid hard dependency on litellm
 # when only the CLI or evaluation modules are used.

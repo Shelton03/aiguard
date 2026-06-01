@@ -38,7 +38,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="AIGuard Human Review",
         description="Lightweight human review console for AIGuard evaluation scores.",
-        version="0.2.0",
+        version="0.7.0",
         docs_url=None,
         redoc_url=None,
         lifespan=_lifespan,

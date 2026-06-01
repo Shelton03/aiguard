@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import json
+import random
 from pathlib import Path
 from typing import Any, Dict, List
 import logging
@@ -85,6 +86,8 @@ class AdversarialEvaluationModule(BaseEvaluationModule):
         if not attacks:
             self._error = _ModuleError("No attacks found after dataset load")
             return
+
+        random.shuffle(attacks)
 
         logger.info("Adversarial: loaded %d attacks", len(attacks))
 
@@ -307,6 +310,13 @@ class HallucinationEvaluationModule(BaseEvaluationModule):
         logger.info("Hallucination: running %d test cases", len(test_cases))
         for idx, case in enumerate(test_cases, start=1):
             case_payload = dict(case)
+            if model_client and "response" in case_payload and not case_payload.get("messages"):
+                self._error = _ModuleError(
+                    "Hallucination test case includes 'response' while use_live_model is true. "
+                    "Remove 'response' for single-turn cases or set evaluation.hallucination.use_live_model to false. "
+                    "For multi-turn tests, provide 'messages'."
+                )
+                return
             if model_client:
                 prompt = case_payload.get("prompt")
                 messages = case_payload.get("messages")

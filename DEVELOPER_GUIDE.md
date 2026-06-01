@@ -1,6 +1,6 @@
 # AIGuard — Developer Guide
 
-> **Version 0.5.8** · Python ≥ 3.10 · MIT License  
+> **Version 0.7.0** · Python ≥ 3.10 · MIT License  
 > Package: `aiguard-safety` on PyPI · Repository: <https://github.com/Shelton03/aiguard>
 
 ---
@@ -471,6 +471,9 @@ For full judge reasoning, keep the judge model local and point `judge.endpoint` 
 
 `evaluation.hallucination.test_cases` accepts either an inline list or a JSON file path.
 
+When `use_live_model: true`, omit `response` in single-turn test cases — the CLI will query the model and populate it.
+Use `messages` for multi-turn cases; if you want to score a fixed response, set `use_live_model: false`.
+
 `hallucination_test_cases.json`
 
 Generate a starter test case file:
@@ -483,12 +486,12 @@ aiguard evaluate hallucination init-test-cases --output hallucination_test_cases
 [
   {
     "id": "gt-1",
-    "response": "The Eiffel Tower is in Berlin.",
+    "prompt": "Where is the Eiffel Tower located?",
     "ground_truth": "The Eiffel Tower is in Paris, France."
   },
   {
     "id": "ctx-1",
-    "response": "The drug reduces cholesterol by 30%.",
+    "prompt": "What did the trial report about cholesterol reduction?",
     "context_documents": ["Trial showed 12% cholesterol reduction."]
   }
 ]
@@ -1568,16 +1571,16 @@ to authenticate with PyPI — no `PYPI_TOKEN` secret is stored anywhere.
 
 ```toml
 [project]
-version = "0.5.6"   # ← increment
+version = "0.7.0"   # ← increment
 ```
 
 **2. Commit, push, and tag:**
 
 ```bash
 git add pyproject.toml
-git commit -m "chore: bump to 0.5.6"
+git commit -m "chore: bump to 0.7.0"
 git push
-git tag v0.5.6
+git tag v0.7.0
 git push --tags
 ```
 

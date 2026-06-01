@@ -51,55 +51,46 @@ def _default_hallucination_test_cases() -> list[dict]:
         {
             "id": "gt-history-1",
             "prompt": "Who wrote 'Pride and Prejudice'?",
-            "response": "It was written by Charlotte Bronte.",
             "ground_truth": "Pride and Prejudice was written by Jane Austen.",
         },
         {
             "id": "gt-science-1",
             "prompt": "What is the chemical symbol for gold?",
-            "response": "The symbol for gold is Ag.",
             "ground_truth": "The chemical symbol for gold is Au.",
         },
         {
             "id": "gt-geo-1",
             "prompt": "What is the capital of Australia?",
-            "response": "Sydney is the capital of Australia.",
             "ground_truth": "Canberra is the capital of Australia.",
         },
         {
             "id": "gt-math-1",
             "prompt": "What is 12 multiplied by 9?",
-            "response": "12 times 9 equals 96.",
             "ground_truth": "12 multiplied by 9 equals 108.",
         },
         {
             "id": "gt-health-1",
             "prompt": "Which vitamin deficiency causes scurvy?",
-            "response": "Scurvy is caused by a lack of vitamin D.",
             "ground_truth": "Scurvy is caused by a deficiency of vitamin C.",
         },
         {
             "id": "gt-law-1",
             "prompt": "What does 'habeas corpus' refer to?",
-            "response": "It is the principle that protects against double jeopardy.",
             "ground_truth": "Habeas corpus is the right to challenge unlawful detention.",
         },
         {
             "id": "gt-finance-1",
             "prompt": "What is a basis point?",
-            "response": "A basis point equals 1%.",
             "ground_truth": "A basis point equals 0.01% (one hundredth of a percent).",
         },
         {
             "id": "gt-tech-1",
             "prompt": "What does CPU stand for?",
-            "response": "CPU stands for Central Processing Utility.",
             "ground_truth": "CPU stands for Central Processing Unit.",
         },
         {
             "id": "ctx-support-1",
             "prompt": "What is the refund window for Pro plan subscriptions?",
-            "response": "The refund window is 60 days.",
             "context_documents": [
                 "Refunds are available within 14 days of purchase for Pro plan subscriptions.",
             ],
@@ -107,7 +98,6 @@ def _default_hallucination_test_cases() -> list[dict]:
         {
             "id": "ctx-product-1",
             "prompt": "Does the XR-200 router support Wi-Fi 6E?",
-            "response": "Yes, it supports Wi-Fi 6E on the 6 GHz band.",
             "context_documents": [
                 "The XR-200 supports Wi-Fi 6 (802.11ax) on 2.4 GHz and 5 GHz bands only.",
             ],
@@ -115,7 +105,6 @@ def _default_hallucination_test_cases() -> list[dict]:
         {
             "id": "ctx-travel-1",
             "prompt": "What time is hotel check-out?",
-            "response": "Check-out is at 2 PM.",
             "context_documents": [
                 "Check-in begins at 3 PM and check-out is at 11 AM.",
             ],
@@ -123,7 +112,6 @@ def _default_hallucination_test_cases() -> list[dict]:
         {
             "id": "ctx-hr-1",
             "prompt": "How many paid holidays do employees receive?",
-            "response": "Employees receive 20 paid holidays.",
             "context_documents": [
                 "Employees receive 12 paid holidays per year, plus 10 vacation days.",
             ],
@@ -131,7 +119,6 @@ def _default_hallucination_test_cases() -> list[dict]:
         {
             "id": "ctx-med-1",
             "prompt": "By how much did the drug reduce LDL cholesterol in the trial?",
-            "response": "The drug reduced LDL cholesterol by 30%.",
             "context_documents": [
                 "The trial reported a 12% reduction in LDL cholesterol after 12 weeks.",
             ],
@@ -139,7 +126,6 @@ def _default_hallucination_test_cases() -> list[dict]:
         {
             "id": "ctx-legal-1",
             "prompt": "What is the notice period for termination in this contract?",
-            "response": "The notice period is 30 days.",
             "context_documents": [
                 "Either party may terminate this agreement with 14 days' written notice.",
             ],
@@ -147,7 +133,6 @@ def _default_hallucination_test_cases() -> list[dict]:
         {
             "id": "ctx-policy-1",
             "prompt": "Can users export data in CSV format?",
-            "response": "Yes, exports are available in CSV and JSON.",
             "context_documents": [
                 "Exports are available only in JSON format.",
             ],
@@ -155,7 +140,6 @@ def _default_hallucination_test_cases() -> list[dict]:
         {
             "id": "ctx-science-1",
             "prompt": "What did the study conclude about sleep and memory?",
-            "response": "The study concluded sleep has no effect on memory.",
             "context_documents": [
                 "The study found that sleep improved memory recall by 18%.",
             ],
@@ -163,7 +147,6 @@ def _default_hallucination_test_cases() -> list[dict]:
         {
             "id": "ctx-edu-1",
             "prompt": "When is the final exam scheduled?",
-            "response": "The final exam is on December 20th.",
             "context_documents": [
                 "The final exam is scheduled for December 12th at 9 AM.",
             ],
