@@ -12,6 +12,17 @@ from .language_detection import (
     get_attack_keywords,
 )
 
+try:
+    # Build-time phrase filter (English-only) — widens the English lexicon
+    # with curated attack phrases and leet-speak patterns.
+    from .data.build_default_dataset import (
+        ATTACK_PHRASES,
+        ATTACK_OBFUSCATION_PATTERNS,
+    )
+except ImportError:
+    ATTACK_PHRASES = ()
+    ATTACK_OBFUSCATION_PATTERNS = ()
+
 
 @dataclass
 class ScoreResult:
@@ -33,16 +44,27 @@ class HeuristicScorer:
             self.risky_keywords = set(risky_keywords)
         else:
             target_lang = language or "en"
-            self.risky_keywords = set(get_attack_keywords(target_lang))
+            self.risky_keywords = self._build_keyword_set(target_lang)
         self.language = language or "en"
+
+    @staticmethod
+    def _build_keyword_set(language: str) -> set[str]:
+        """Return the union of the per-language attack lexicon and the
+        cross-language curated attack phrases from the build-time filter.
+        """
+        keywords = set(get_attack_keywords(language))
+        keywords.update(ATTACK_PHRASES)
+        return keywords
 
     def __call__(self, attack: Attack) -> ScoreResult:
         if self.language is None and hasattr(attack, "metadata") and attack.metadata.language:
             self.language = attack.metadata.language
-            self.risky_keywords = set(get_attack_keywords(self.language))
+            self.risky_keywords = self._build_keyword_set(self.language)
 
         lowered = attack.content.lower()
-        hits = sum(1 for kw in self.risky_keywords if kw in lowered)
+        phrase_hits = sum(1 for kw in self.risky_keywords if kw in lowered)
+        obf_hits = sum(1 for pat in ATTACK_OBFUSCATION_PATTERNS if pat.search(lowered))
+        hits = phrase_hits + obf_hits
         score = min(1.0, 0.2 + 0.2 * hits)
         return ScoreResult(
             score=score,
