@@ -1,6 +1,7 @@
 """Built-in evaluation module adapters."""
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import json
@@ -22,6 +23,13 @@ from config.judge_config import load_judge_config
 from evaluation.base import BaseEvaluationModule
 from evaluation.registry import module_registry
 from evaluation.model_client import LiteLLMClient, resolve_model_config
+
+try:
+    from aiguard import __version__ as AIGUARD_VERSION
+except ImportError:
+    AIGUARD_VERSION = "unknown"
+
+REPORT_SCHEMA_VERSION = "2"
 
 logger = logging.getLogger(__name__)
 
@@ -129,16 +137,26 @@ class AdversarialEvaluationModule(BaseEvaluationModule):
             rationale = ""
             judge_result = None
             signals = None
+            per_run_error: str | None = None
             evaluated += 1
+            run_start = time.perf_counter()
             if model_client:
                 scores = []
                 for _ in range(runs_per_test):
-                    messages = model_client.build_messages(attack.content)
-                    response_text = model_client.run(messages)
-                    scored = response_scorer.score(attack, response_text)
-                    scores.append(scored.score)
-                    rationale = scored.rationale
-                    signals = scored.signals
+                    try:
+                        messages = model_client.build_messages(attack.content)
+                        response_text = model_client.run(messages)
+                        scored = response_scorer.score(attack, response_text)
+                        scores.append(scored.score)
+                        rationale = scored.rationale
+                        signals = scored.signals
+                    except Exception as exc:
+                        logger.warning(
+                            "Adversarial: run failed for attack %s: %s",
+                            attack.attack_id,
+                            exc,
+                        )
+                        per_run_error = f"{type(exc).__name__}: {exc}"
 
                 # Run judge evaluation if available (enriches results)
                 if adversarial_judge:
@@ -161,16 +179,27 @@ class AdversarialEvaluationModule(BaseEvaluationModule):
                         logger.warning("Adversarial: judge failed for attack %s", attack.attack_id)
             else:
                 scores = [static_scorer(attack).score for _ in range(runs_per_test)]
-            avg_score = sum(scores) / len(scores)
+            latency_ms = (time.perf_counter() - run_start) * 1000.0
+            avg_score = sum(scores) / len(scores) if scores else 0.0
+            passed = avg_score < float(threshold)
             result = {
+                "index": evaluated,
                 "attack_id": attack.attack_id,
                 "attack_type": attack.attack_type.value,
                 "subtype": attack.subtype,
                 "category": f"{attack.attack_type.value}/{attack.subtype or 'unspecified'}",
-                "avg_score": avg_score,
-                "content": attack.content,
+                "source_dataset": attack.source_dataset,
+                "severity": attack.severity,
+                "prompt": attack.content,
                 "response": response_text,
+                "response_snippet": _truncate(response_text),
+                "scores": [round(s, 6) for s in scores],
+                "avg_score": round(avg_score, 6),
+                "threshold": float(threshold),
+                "passed": bool(passed),
+                "latency_ms": round(latency_ms, 3),
                 "rationale": rationale,
+                "error": per_run_error,
             }
             if signals:
                 result["signals"] = signals
@@ -203,6 +232,8 @@ class AdversarialEvaluationModule(BaseEvaluationModule):
 
         top_failing = sorted(results, key=lambda r: r["avg_score"], reverse=True)[:5]
         report = {
+            "schema_version": REPORT_SCHEMA_VERSION,
+            "aiguard_version": AIGUARD_VERSION,
             "project": project,
             "module": self.module_name,
             "timestamp": _now_iso(),
@@ -214,6 +245,7 @@ class AdversarialEvaluationModule(BaseEvaluationModule):
             "status": "fail" if global_risk >= float(threshold) else "pass",
             "failure_breakdown_by_category": failure_breakdown,
             "skipped_non_english": skipped_non_english,
+            "test_results": results,
             "top_failing_examples": [
                 {
                     "attack_id": rec["attack_id"],
@@ -221,7 +253,7 @@ class AdversarialEvaluationModule(BaseEvaluationModule):
                     "subtype": rec["subtype"],
                     "category": rec["category"],
                     "avg_score": round(rec["avg_score"], 6),
-                    "content_snippet": _truncate(rec["content"]),
+                    "content_snippet": _truncate(rec["prompt"]),
                     "response_snippet": _truncate(rec.get("response", "")),
                     "score_rationale": rec.get("rationale", ""),
                     "signals": rec.get("signals"),
@@ -235,6 +267,8 @@ class AdversarialEvaluationModule(BaseEvaluationModule):
     def generate_report(self) -> Dict[str, Any]:
         if self._error:
             return {
+                "schema_version": REPORT_SCHEMA_VERSION,
+                "aiguard_version": AIGUARD_VERSION,
                 "module": self.module_name,
                 "timestamp": _now_iso(),
                 "status": "error",
@@ -317,6 +351,8 @@ class HallucinationEvaluationModule(BaseEvaluationModule):
                     "For multi-turn tests, provide 'messages'."
                 )
                 return
+            response_text = ""
+            case_error: str | None = None
             if model_client:
                 prompt = case_payload.get("prompt")
                 messages = case_payload.get("messages")
@@ -329,24 +365,67 @@ class HallucinationEvaluationModule(BaseEvaluationModule):
                         "Hallucination test case missing 'prompt' or 'messages' for live model evaluation"
                     )
                     return
-                response_text = model_client.run(built_messages)
-                case_payload["response"] = response_text
+                try:
+                    response_text = model_client.run(built_messages)
+                    case_payload["response"] = response_text
+                except Exception as exc:
+                    logger.warning(
+                        "Hallucination: model run failed for case %s: %s",
+                        case_payload.get("id", f"case-{idx}"),
+                        exc,
+                    )
+                    case_error = f"{type(exc).__name__}: {exc}"
 
             trace = case.get("trace") or module_cfg.get("default_trace") or {
                 "trace_id": case.get("id", f"case-{idx}"),
                 "model": model_cfg.model_name if model_cfg else module_cfg.get("model_name", "unknown"),
                 "metadata": {"execution_mode": "evaluation"},
             }
-            result = evaluator.evaluate(case_payload, trace)
-            out = result.to_dict()
-            risk = out["scores"]["overall_risk"]
+            run_start = time.perf_counter()
+            try:
+                result_obj = evaluator.evaluate(case_payload, trace)
+                out = result_obj.to_dict()
+            except Exception as exc:
+                logger.warning(
+                    "Hallucination: evaluate failed for case %s: %s",
+                    case_payload.get("id", f"case-{idx}"),
+                    exc,
+                )
+                case_error = case_error or f"{type(exc).__name__}: {exc}"
+                out = {
+                    "category": "unknown",
+                    "scores": {"overall_risk": 0.0},
+                    "reasoning": f"evaluation raised: {case_error}",
+                    "confidence": 0.0,
+                    "metadata": {},
+                }
+            latency_ms = (time.perf_counter() - run_start) * 1000.0
+            risk = float(out["scores"].get("overall_risk", 0.0) or 0.0)
+            passed = risk < float(threshold)
             results.append(
                 {
+                    "index": idx,
                     "case_id": case.get("id", f"case-{idx}"),
-                    "category": out["category"],
-                    "overall_risk": float(risk),
-                    "reasoning": out.get("reasoning", ""),
+                    "category": out.get("category", "unknown"),
+                    "prompt": case_payload.get("prompt"),
+                    "messages": case_payload.get("messages"),
+                    "response": case_payload.get("response", ""),
                     "response_snippet": _truncate(case_payload.get("response", ""), 200),
+                    "ground_truth": case_payload.get("ground_truth"),
+                    "context_documents": case_payload.get("context_documents", []),
+                    "expected_behavior": case_payload.get("expected_behavior"),
+                    "scores": {
+                        k: (None if v is None else round(float(v), 6))
+                        for k, v in (out.get("scores") or {}).items()
+                    },
+                    "overall_risk": round(risk, 6),
+                    "threshold": float(threshold),
+                    "passed": bool(passed),
+                    "latency_ms": round(latency_ms, 3),
+                    "reasoning": out.get("reasoning", ""),
+                    "confidence": out.get("confidence"),
+                    "metadata": out.get("metadata", {}),
+                    "error": case_error,
                 }
             )
             if idx % 10 == 0 or idx == len(test_cases):
@@ -361,6 +440,8 @@ class HallucinationEvaluationModule(BaseEvaluationModule):
 
         top_failing = sorted(results, key=lambda r: r["overall_risk"], reverse=True)[:5]
         report = {
+            "schema_version": REPORT_SCHEMA_VERSION,
+            "aiguard_version": AIGUARD_VERSION,
             "project": project,
             "module": self.module_name,
             "timestamp": _now_iso(),
@@ -371,6 +452,7 @@ class HallucinationEvaluationModule(BaseEvaluationModule):
             "threshold": float(threshold),
             "status": "fail" if global_risk >= float(threshold) else "pass",
             "failure_breakdown_by_category": failure_breakdown,
+            "test_results": results,
             "top_failing_examples": [
                 {
                     "case_id": rec["case_id"],
@@ -387,6 +469,8 @@ class HallucinationEvaluationModule(BaseEvaluationModule):
     def generate_report(self) -> Dict[str, Any]:
         if self._error:
             return {
+                "schema_version": REPORT_SCHEMA_VERSION,
+                "aiguard_version": AIGUARD_VERSION,
                 "module": self.module_name,
                 "timestamp": _now_iso(),
                 "status": "error",

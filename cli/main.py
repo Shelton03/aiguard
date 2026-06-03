@@ -5,7 +5,7 @@ import json
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Dict, List, Optional
 
 import typer
 
@@ -13,7 +13,12 @@ from evaluation.registry import module_registry as registry
 
 from cli.config import ConfigError, load_project_config, resolve_project_name
 from cli.exit_codes import aggregate_exit_codes
-from cli.reporting import write_report
+from cli.reporting import (
+    combined_report,
+    default_report_path,
+    format_terminal_summary,
+    write_report,
+)
 from cli.services import (
     CalibrationService,
     ProjectService,
@@ -21,6 +26,12 @@ from cli.services import (
     ReviewService,
     StorageService,
 )
+
+try:
+    from aiguard import __version__ as AIGUARD_VERSION
+except ImportError:
+    AIGUARD_VERSION = "unknown"
+
 from cli.monitor_command import monitor_app as _monitor_app_impl
 from cli.pipeline_command import pipeline_app
 from cli.dev_command import dev_app
@@ -271,13 +282,35 @@ storage: sqlite
 def _run_module(module_name: str, config: dict, mode: str, root: Path):
     module_cls = registry.get(module_name)
     module = module_cls(config, mode, str(root))
-    typer.echo(f"→ Running {module_name} ({mode})")
+    typer.echo(f"→ Running {module_name} ({mode})", err=True)
     module.run()
     report = module.generate_report()
     exit_code = module.exit_code()
     status = report.get("status", "unknown")
-    typer.echo(f"✓ {module_name} complete (status={status})")
+    typer.echo(f"✓ {module_name} complete (status={status})", err=True)
     return report, exit_code
+
+
+def _emit_report(
+    report: Dict[str, object],
+    *,
+    report_path: Optional[Path],
+    no_report: bool,
+    full: bool,
+) -> None:
+    """Write the report file (unless disabled) and print a stdout summary.
+
+    The report path is announced on **stderr** so a user who pipes
+    ``aiguard evaluate > summary.json`` still captures a clean summary on
+    stdout.
+    """
+    if not no_report and report_path is not None:
+        written = write_report(report_path, report)
+        typer.echo(f"Report: {written}", err=True)
+    if full:
+        typer.echo(json.dumps(report, indent=2, default=str))
+    else:
+        typer.echo(format_terminal_summary(report))
 
 
 def _handle_error(exc: Exception) -> None:
@@ -348,7 +381,21 @@ def project_export(
 def evaluate_all(
     ctx: typer.Context,
     project: Optional[str] = typer.Option(None, "--project", help="Project name"),
-    output: Optional[Path] = typer.Option(None, "--output", help="Write JSON report"),
+    output: Optional[Path] = typer.Option(
+        None,
+        "--output",
+        help="Write JSON report to this path (overrides the default per-run report file)",
+    ),
+    no_report: bool = typer.Option(
+        False,
+        "--no-report",
+        help="Skip writing the report file (still prints the terminal summary)",
+    ),
+    full: bool = typer.Option(
+        False,
+        "--full",
+        help="Print the full report JSON to stdout (default is a minimal summary)",
+    ),
     mode: str = typer.Option("quick", "--mode", help="Evaluation mode"),
 ) -> None:
     if ctx.invoked_subcommand is not None:
@@ -368,8 +415,8 @@ def evaluate_all(
     if not enabled:
         _handle_error(ConfigError("No evaluation.enabled_modules configured"))
 
-    reports = []
-    codes = []
+    reports: List[Dict[str, object]] = []
+    codes: List[int] = []
     for name in enabled:
         try:
             report, code = _run_module(name, config, mode, root)
@@ -379,23 +426,37 @@ def evaluate_all(
         codes.append(code)
 
     aggregate_code = aggregate_exit_codes(codes)
-    combined = {
-        "project": project_name,
-        "timestamp": _now_iso(),
-        "status": "error" if aggregate_code == 2 else "fail" if aggregate_code == 1 else "pass",
-        "modules": reports,
-    }
-    if output:
-        write_report(output, combined)
-        typer.echo(f"Wrote {output}")
-    typer.echo(json.dumps(combined, indent=2))
+    combined = combined_report(
+        project_name,
+        reports,
+        aggregate_code,
+        aiguard_version=AIGUARD_VERSION,
+    )
+    report_path = output if output is not None else default_report_path(
+        project_name, "combined", root, combined=True
+    )
+    _emit_report(combined, report_path=report_path, no_report=no_report, full=full)
     raise typer.Exit(code=aggregate_code)
 
 
 def _register_module_command(module_name: str) -> None:
     def _cmd(
         project: Optional[str] = typer.Option(None, "--project", help="Project name"),
-        output: Optional[Path] = typer.Option(None, "--output", help="Write JSON report"),
+        output: Optional[Path] = typer.Option(
+            None,
+            "--output",
+            help="Write JSON report to this path (overrides the default per-run report file)",
+        ),
+        no_report: bool = typer.Option(
+            False,
+            "--no-report",
+            help="Skip writing the report file (still prints the terminal summary)",
+        ),
+        full: bool = typer.Option(
+            False,
+            "--full",
+            help="Print the full report JSON to stdout (default is a minimal summary)",
+        ),
         mode: str = typer.Option("quick", "--mode", help="Evaluation mode"),
     ) -> None:
         logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
@@ -410,10 +471,11 @@ def _register_module_command(module_name: str) -> None:
         except Exception as exc:
             _handle_error(exc)
 
-        if output:
-            write_report(output, report)
-            typer.echo(f"Wrote {output}")
-        typer.echo(json.dumps(report, indent=2))
+        project_name = resolve_project_name(config, root, project)
+        report_path = output if output is not None else default_report_path(
+            project_name, module_name, root
+        )
+        _emit_report(report, report_path=report_path, no_report=no_report, full=full)
         raise typer.Exit(code=code)
 
     if module_name == "hallucination":
@@ -421,12 +483,32 @@ def _register_module_command(module_name: str) -> None:
         def hallucination_run(
             ctx: typer.Context,
             project: Optional[str] = typer.Option(None, "--project", help="Project name"),
-            output: Optional[Path] = typer.Option(None, "--output", help="Write JSON report"),
+            output: Optional[Path] = typer.Option(
+                None,
+                "--output",
+                help="Write JSON report to this path (overrides the default per-run report file)",
+            ),
+            no_report: bool = typer.Option(
+                False,
+                "--no-report",
+                help="Skip writing the report file (still prints the terminal summary)",
+            ),
+            full: bool = typer.Option(
+                False,
+                "--full",
+                help="Print the full report JSON to stdout (default is a minimal summary)",
+            ),
             mode: str = typer.Option("quick", "--mode", help="Evaluation mode"),
         ) -> None:
             if ctx.invoked_subcommand is not None:
                 return
-            _cmd(project=project, output=output, mode=mode)
+            _cmd(
+                project=project,
+                output=output,
+                no_report=no_report,
+                full=full,
+                mode=mode,
+            )
 
         @hallucination_app.command("init-test-cases")
         def hallucination_init_test_cases(

@@ -1,6 +1,8 @@
 """CI template generator for AIGuard."""
 from __future__ import annotations
 
+REPORT_DIR = ".aiguard/reports"
+
 
 def github_template(project: str) -> str:
     return f"""name: AIGuard Evaluation
@@ -23,6 +25,14 @@ jobs:
         env:
           OPENAI_API_KEY: ${{{{ secrets.OPENAI_API_KEY }}}}
         run: aiguard evaluate --project {project}
+      - name: Upload AIGuard report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aiguard-report
+          path: {REPORT_DIR}/
+          if-no-files-found: warn
+          retention-days: 30
 """
 
 
@@ -33,6 +43,11 @@ def gitlab_template(project: str) -> str:
   script:
     - pip install aiguard
     - aiguard evaluate --project {project}
+  artifacts:
+    when: always
+    expire_in: 30 days
+    paths:
+      - {REPORT_DIR}/
   variables:
     OPENAI_API_KEY: "$OPENAI_API_KEY"
 """

@@ -1373,16 +1373,24 @@ aiguard
 ### CI evaluation flow
 
 ```
-1. aiguard evaluate adversarial
+1. aiguard evaluate [adversarial|hallucination]   (no args runs every enabled module)
 2. cli/main.py reads aiguard.yaml
-3. AdversarialEvaluationModule.run():
-   a. load_datasets(dataset_config, storage)
-   b. AttackStorage.list_attacks()
-   c. HeuristicScorer scores each attack
-   d. Builds report dict
-4. aggregate_exit_codes(codes) → 0|1|2
-5. JSON report written to --output (optional)
-6. Process exits with appropriate code
+3. AdversarialEvaluationModule.run() / HallucinationEvaluationModule.run():
+   a. load_datasets(dataset_config, storage) / load test cases
+   b. Adversarial: AttackStorage.list_attacks() — Hallucination: JSON test cases
+   c. ModelClient runs each test (adversarial runs N times, hallucinates once)
+   d. HeuristicScorer / HallucinationTest scores each run
+   e. Builds per-test result dicts (full prompt, response, per-run scores, latency)
+4. _run_module() returns the aggregated report (schema_version 2)
+5. aggregate_exit_codes(codes) → 0|1|2
+6. cli/reporting.write_report() — atomic write of the full report file
+   Default: .aiguard/reports/<project>-<module>-<UTC-timestamp>.json
+   Override: --output PATH
+   Skip:    --no-report
+7. format_terminal_summary() prints the minimal headline summary to stdout
+   (--full prints the entire report to stdout instead)
+8. "Report: <path>" is announced on stderr
+9. Process exits with the aggregate code
 ```
 
 ---
