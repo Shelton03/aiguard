@@ -397,6 +397,12 @@ def evaluate_all(
         help="Print the full report JSON to stdout (default is a minimal summary)",
     ),
     mode: str = typer.Option("quick", "--mode", help="Evaluation mode"),
+    pdf: bool = typer.Option(False, "--pdf", help="Generate PDF report"),
+    pdf_output: Optional[Path] = typer.Option(
+        None,
+        "--pdf-output",
+        help="PDF output path (default: same as JSON with .pdf extension)",
+    ),
 ) -> None:
     if ctx.invoked_subcommand is not None:
         return
@@ -435,7 +441,16 @@ def evaluate_all(
     report_path = output if output is not None else default_report_path(
         project_name, "combined", root, combined=True
     )
-    _emit_report(combined, report_path=report_path, no_report=no_report, full=full)
+    
+    # Generate PDF if requested
+    if pdf:
+        from cli.reporting import write_report
+        pdf_path = pdf_output or report_path.with_suffix('.pdf')
+        write_report(report_path, combined, generate_pdf=True, pdf_output=pdf_path)
+        typer.echo(f"PDF report: {pdf_path}", err=True)
+    else:
+        _emit_report(combined, report_path=report_path, no_report=no_report, full=full)
+    
     raise typer.Exit(code=aggregate_code)
 
 
@@ -458,6 +473,12 @@ def _register_module_command(module_name: str) -> None:
             help="Print the full report JSON to stdout (default is a minimal summary)",
         ),
         mode: str = typer.Option("quick", "--mode", help="Evaluation mode"),
+        pdf: bool = typer.Option(False, "--pdf", help="Generate PDF report"),
+        pdf_output: Optional[Path] = typer.Option(
+            None,
+            "--pdf-output",
+            help="PDF output path (default: same as JSON with .pdf extension)",
+        ),
     ) -> None:
         logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
         root = Path.cwd()
@@ -475,7 +496,16 @@ def _register_module_command(module_name: str) -> None:
         report_path = output if output is not None else default_report_path(
             project_name, module_name, root
         )
-        _emit_report(report, report_path=report_path, no_report=no_report, full=full)
+        
+        # Generate PDF if requested
+        if pdf:
+            from cli.reporting import write_report
+            pdf_path = pdf_output or report_path.with_suffix('.pdf')
+            write_report(report_path, report, generate_pdf=True, pdf_output=pdf_path)
+            typer.echo(f"PDF report: {pdf_path}", err=True)
+        else:
+            _emit_report(report, report_path=report_path, no_report=no_report, full=full)
+        
         raise typer.Exit(code=code)
 
     if module_name == "hallucination":
