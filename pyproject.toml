@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aiguard-safety"
-version = "0.7.2"
+version = "0.7.3"
 description = "AIGuard: model-agnostic safety evaluation toolkit (adversarial, evaluator, hallucination)"
 authors = [{ name = "Shelton Mutambirwa", email = "sheltonmutambirwa@gmail.com" }]
 readme = { file = "README.md", content-type = "text/markdown" }
@@ -48,6 +48,9 @@ sdk = [
 monitoring = [
     "fastapi>=0.110.0",
     "uvicorn[standard]>=0.29.0",
+]
+pdf = [
+    "reportlab>=4.0.0",
 ]
 
 [project.scripts]
