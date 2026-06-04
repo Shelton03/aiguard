@@ -158,10 +158,6 @@ def write_report(
         try:
             generator = PDFReportGenerator(pdf_path)
             generator.generate(cleaned_data)
-        except ImportError as e:
-            # ReportLab not installed - warn but don't fail
-            import sys
-            print(f"Warning: Cannot generate PDF - {e}", file=sys.stderr)
         except Exception as e:
             # PDF generation failed - warn but don't fail
             import sys

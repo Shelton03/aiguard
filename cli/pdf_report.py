@@ -13,60 +13,52 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
-try:
-    from reportlab.lib import colors
-    from reportlab.lib.pagesizes import A4
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib.units import cm
-    from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
-    from reportlab.platypus import (
-        SimpleDocTemplate,
-        Paragraph,
-        Table,
-        TableStyle,
-        PageBreak,
-        Spacer,
-        Image,
-    )
-    from reportlab.graphics.shapes import Drawing
-    from reportlab.graphics.charts.barcharts import VerticalBarChart
-    from reportlab.graphics.charts.piecharts import Pie
-    from reportlab.pdfbase import pdfmetrics
-    from reportlab.pdfbase.ttfonts import TTFont
-    REPORTLAB_AVAILABLE = True
-    
-    # Non-vibrant color palette
-    COLORS = {
-        'primary': colors.HexColor('#2c5f8d'),    # Muted blue
-        'secondary': colors.HexColor('#5a7d92'),  # Slate blue
-        'accent': colors.HexColor('#7a9c5e'),     # Muted green
-        'warning': colors.HexColor('#c9a35d'),    # Muted gold
-        'danger': colors.HexColor('#c47b7b'),     # Muted red
-        'neutral': colors.HexColor('#6b7b8c'),    # Gray
-        'background': colors.HexColor('#f5f7f8'), # Light gray
-        'text': colors.HexColor('#333333'),       # Dark gray for text
-        'light_text': colors.HexColor('#666666'), # Lighter gray
-        'border': colors.HexColor('#dddddd'),     # Light border
-    }
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import cm
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+from reportlab.platypus import (
+    SimpleDocTemplate,
+    Paragraph,
+    Table,
+    TableStyle,
+    PageBreak,
+    Spacer,
+    Image,
+)
+from reportlab.graphics.shapes import Drawing
+from reportlab.graphics.charts.barcharts import VerticalBarChart
+from reportlab.graphics.charts.piecharts import Pie
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 
-    # Risk level colors
-    RISK_COLORS = {
-        'safe': colors.HexColor('#e0e0e0'),       # Light gray
-        'ambiguous': colors.HexColor('#fff9c4'),  # Light yellow
-        'low': colors.HexColor('#c8e6c9'),        # Light green
-        'moderate': colors.HexColor('#ffe0b2'),   # Orange
-        'high': colors.HexColor('#ef9a9a'),       # Muted red
-    }
-except ImportError:
-    REPORTLAB_AVAILABLE = False
-    COLORS = {}
-    RISK_COLORS = {}
+# Non-vibrant color palette
+COLORS = {
+    'primary': colors.HexColor('#2c5f8d'),    # Muted blue
+    'secondary': colors.HexColor('#5a7d92'),  # Slate blue
+    'accent': colors.HexColor('#7a9c5e'),     # Muted green
+    'warning': colors.HexColor('#c9a35d'),    # Muted gold
+    'danger': colors.HexColor('#c47b7b'),     # Muted red
+    'neutral': colors.HexColor('#6b7b8c'),    # Gray
+    'background': colors.HexColor('#f5f7f8'), # Light gray
+    'text': colors.HexColor('#333333'),       # Dark gray for text
+    'light_text': colors.HexColor('#666666'), # Lighter gray
+    'border': colors.HexColor('#dddddd'),     # Light border
+}
+
+# Risk level colors
+RISK_COLORS = {
+    'safe': colors.HexColor('#e0e0e0'),       # Light gray
+    'ambiguous': colors.HexColor('#fff9c4'),  # Light yellow
+    'low': colors.HexColor('#c8e6c9'),        # Light green
+    'moderate': colors.HexColor('#ffe0b2'),   # Orange
+    'high': colors.HexColor('#ef9a9a'),       # Muted red
+}
 
 
 def get_risk_color(score: float):
     """Get color for risk score."""
-    if not REPORTLAB_AVAILABLE:
-        return None
     if score < 0.20:
         return RISK_COLORS['safe']
     elif score < 0.21:
@@ -97,12 +89,6 @@ class PDFReportGenerator:
     """Generate PDF reports from AIGuard evaluation data."""
 
     def __init__(self, output_path: Path):
-        if not REPORTLAB_AVAILABLE:
-            raise ImportError(
-                "reportlab is required for PDF generation. "
-                "Install with: pip install reportlab>=4.0.0"
-            )
-        
         self.output_path = Path(output_path)
         self.doc = SimpleDocTemplate(
             str(self.output_path),
