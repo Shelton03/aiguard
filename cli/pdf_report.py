@@ -332,10 +332,10 @@ class PDFReportGenerator:
         chart.x = 2*cm
         chart.y = 4*cm
         
-        chart.xValueAxis.labels.fontName = 'Helvetica'
-        chart.xValueAxis.labels.fontSize = 8
-        chart.yValueAxis.labels.fontName = 'Helvetica'
-        chart.yValueAxis.labels.fontSize = 8
+        chart.categoryAxis.labels.fontName = 'Helvetica'
+        chart.categoryAxis.labels.fontSize = 8
+        chart.valueAxis.labels.fontName = 'Helvetica'
+        chart.valueAxis.labels.fontSize = 8
         
         categories = ['Safe', 'Ambiguous', 'Low', 'Moderate', 'High']
         values = [bins['safe'], bins['ambiguous'], bins['low'], bins['moderate'], bins['high']]
