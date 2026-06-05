@@ -20,11 +20,11 @@ jobs:
         with:
           python-version: '3.11'
       - name: Install AIGuard
-        run: pip install aiguard
+        run: pip install aiguard-safety
       - name: Run evaluation
         env:
           OPENAI_API_KEY: ${{{{ secrets.OPENAI_API_KEY }}}}
-        run: aiguard evaluate --project {project}
+        run: aiguard evaluate --project {project} --mode quick
       - name: Upload AIGuard report
         if: always()
         uses: actions/upload-artifact@v4
