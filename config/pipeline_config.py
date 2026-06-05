@@ -41,6 +41,22 @@ class PipelineConfig:
     # LLM judge configuration (local endpoint)
     judge: JudgeConfig = field(default_factory=JudgeConfig)
 
+    # Human Review Queue Settings
+    enable_review_queue: bool = False
+    """Enable automatic human review queueing (default: disabled)"""
+
+    review_sample_rate: float = 0.20
+    """Probability of random sampling (0.0-1.0, default: 20%)"""
+
+    review_high_score_threshold: Optional[float] = None
+    """Trigger review if score >= this value (None = disabled)"""
+
+    review_low_score_threshold: Optional[float] = None
+    """Trigger review if score <= this value (None = disabled)"""
+
+    review_send_email: bool = True
+    """Send email notification when review is triggered"""
+
     extra: Dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -48,6 +64,14 @@ class PipelineConfig:
             raise ValueError("evaluation_batch_interval_hours must be > 0")
         if self.max_batch_size <= 0:
             raise ValueError("max_batch_size must be > 0")
+        if not 0.0 <= self.review_sample_rate <= 1.0:
+            raise ValueError("review_sample_rate must be between 0.0 and 1.0")
+        if (self.review_high_score_threshold is not None and
+                not 0.0 <= self.review_high_score_threshold <= 1.0):
+            raise ValueError("review_high_score_threshold must be between 0.0 and 1.0")
+        if (self.review_low_score_threshold is not None and
+                not 0.0 <= self.review_low_score_threshold <= 1.0):
+            raise ValueError("review_low_score_threshold must be between 0.0 and 1.0")
 
 
 def load_pipeline_config(
@@ -84,6 +108,14 @@ def load_pipeline_config(
             )
             raw["project_id"] = pipeline_section.get("project_id", "")
 
+            # Human Review Queue Settings
+            review_section: Dict[str, Any] = pipeline_section.get("review", {}) or {}
+            raw["enable_review_queue"] = review_section.get("enabled", False)
+            raw["review_sample_rate"] = float(review_section.get("sample_rate", 0.20))
+            raw["review_high_score_threshold"] = review_section.get("high_score_threshold")
+            raw["review_low_score_threshold"] = review_section.get("low_score_threshold")
+            raw["review_send_email"] = review_section.get("send_email", True)
+
             api_section: Dict[str, Any] = monitoring_section.get("api", {}) or {}
             raw["api_host"] = api_section.get("host", "0.0.0.0")
             raw["api_port"] = api_section.get("port", 8080)
@@ -115,4 +147,9 @@ def load_pipeline_config(
         api_port=raw.get("api_port", 8080),
         ui_port=raw.get("ui_port", 3000),
         judge=judge_config,
+        enable_review_queue=raw.get("enable_review_queue", False),
+        review_sample_rate=raw.get("review_sample_rate", 0.20),
+        review_high_score_threshold=raw.get("review_high_score_threshold"),
+        review_low_score_threshold=raw.get("review_low_score_threshold"),
+        review_send_email=raw.get("review_send_email", True),
     )

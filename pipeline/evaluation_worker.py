@@ -9,8 +9,10 @@ returned as :class:`~pipeline.event_models.TraceEvaluatedEvent` objects.
 from __future__ import annotations
 
 import logging
+import random
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import List
 
 from config.pipeline_config import PipelineConfig
@@ -23,6 +25,8 @@ from pipeline.event_models import (
 from storage.manager import StorageManager
 from storage.models import EvaluationResultRecord, Trace
 from config.judge_config import JudgeConfig
+from review.queue import ReviewQueue
+from review.emailer import Emailer
 
 try:
     from adversarial.judge import AdversarialJudge
@@ -219,6 +223,136 @@ class EvaluationWorker:
             explanation=result.reasoning or "",
             raw=result.to_dict(),
         )
+
+    # ---- Human Review Trigger -----------------------------------------
+
+    def _should_trigger_review(
+        self,
+        event: TraceCreatedEvent,
+        bundle: EvaluationBundle,
+    ) -> tuple[bool, str]:
+        """
+        Determine if this evaluation should trigger a human review.
+
+        Checks (in order):
+        1. Random sampling (primary mechanism, configurable rate)
+        2. High score threshold (optional, if configured)
+        3. Low score threshold (optional, if configured)
+
+        Multiple triggers combine reasons with comma separator
+        (e.g., "random_sample,high_risk_score").
+
+        Returns:
+            tuple: (should_trigger: bool, trigger_reason: str)
+        """
+        if not self._config.enable_review_queue:
+            return False, ""
+
+        # Extract score from bundle (prioritize hallucination, fallback to adversarial)
+        score: float | None = None
+        if bundle.hallucination is not None:
+            score = bundle.hallucination.score
+        elif bundle.adversarial is not None:
+            score = bundle.adversarial.score
+
+        if score is None:
+            return False, ""
+
+        reasons: list[str] = []
+
+        # 1. Random sampling (primary mechanism)
+        if random.random() < self._config.review_sample_rate:
+            reasons.append("random_sample")
+
+        # 2. High score threshold (None = disabled)
+        if (self._config.review_high_score_threshold is not None
+                and score >= self._config.review_high_score_threshold):
+            reasons.append("high_risk_score")
+
+        # 3. Low score threshold (None = disabled)
+        if (self._config.review_low_score_threshold is not None
+                and score <= self._config.review_low_score_threshold):
+            reasons.append("low_risk_score")
+
+        if not reasons:
+            return False, ""
+
+        # Combine reasons (e.g., "random_sample,high_risk_score")
+        combined_reason = ",".join(reasons)
+        logger.info(
+            "Review trigger detected: trace=%s score=%.4f reasons=%s",
+            event.trace_id,
+            score,
+            combined_reason,
+        )
+        return True, combined_reason
+
+    def _enqueue_for_review(
+        self,
+        event: TraceCreatedEvent,
+        bundle: EvaluationBundle,
+        trigger_reason: str,
+    ) -> None:
+        """
+        Add evaluation to human review queue and optionally send email alert.
+
+        Args:
+            event: Trace evaluation event
+            bundle: Evaluation results bundle
+            trigger_reason: Comma-separated list of trigger reasons
+        """
+        # Extract evaluation data (prioritize hallucination, fallback to adversarial)
+        if bundle.hallucination is not None:
+            raw_score = bundle.hallucination.score
+            module_type = "hallucination"
+            model_response = event.output_text or ""
+        elif bundle.adversarial is not None:
+            raw_score = bundle.adversarial.score
+            module_type = "adversarial"
+            model_response = event.output_text or ""
+        else:
+            logger.warning("No evaluation data available for review queue")
+            return
+
+        # Initialize review queue (per-project DB)
+        project_id = event.project_id or "default"
+        db_path = Path(self._storage.root) / ".aiguard" / f"{project_id}.db"
+
+        queue = ReviewQueue(db_path=db_path, project=project_id)
+
+        # Enqueue item
+        item = queue.enqueue(
+            evaluation_id=event.trace_id,
+            module_type=module_type,
+            model_response=model_response,
+            raw_score=raw_score,
+            calibrated_score=raw_score,  # Will be calibrated by UI
+            trigger_reason=trigger_reason,
+        )
+
+        logger.info(
+            "Human review queued: trace=%s project=%s module=%s reason=%s",
+            event.trace_id,
+            project_id,
+            module_type,
+            trigger_reason,
+        )
+
+        # Send email notification (if enabled)
+        if self._config.review_send_email:
+            try:
+                emailer = Emailer()
+                emailer.send_review_alert(
+                    project=project_id,
+                    item_id=item.id,
+                    module_type=module_type,
+                    trigger_reason=trigger_reason,
+                    raw_score=raw_score,
+                    token=item.review_token,
+                )
+            except Exception as exc:
+                logger.error("Failed to send review alert email: %s", exc)
+                # Don't fail the evaluation if email fails
 
     # ---- Adversarial --------------------------------------------------
 
@@ -578,5 +712,16 @@ class EvaluationWorker:
             except Exception:
                 logger.exception(
                     "EvaluationWorker: failed to persist adversarial eval for %s",
+                    event.trace_id,
+                )
+
+        # ----- Human Review Trigger -----
+        should_trigger, trigger_reason = self._should_trigger_review(event, bundle)
+        if should_trigger:
+            try:
+                self._enqueue_for_review(event, bundle, trigger_reason)
+            except Exception:
+                logger.exception(
+                    "EvaluationWorker: failed to enqueue review for %s",
                     event.trace_id,
                 )

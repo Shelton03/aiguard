@@ -6,6 +6,7 @@ import os
 from collections.abc import Generator
 from pathlib import Path
 from typing import Iterator
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -230,3 +231,345 @@ def test_routes_registered():
     assert "/" in paths
     assert "/project/{project_name}/dashboard" in paths
     assert "/project/{project_name}/review/{token}" in paths
+
+
+# ---------------------------------------------------------------------------
+# Auto-trigger tests (Human Review Queue integration)
+# ---------------------------------------------------------------------------
+
+
+def test_random_sampling_rate():
+    """Verify random sampling hits target rate over large sample."""
+    import random
+    random.seed(42)  # Reproducible
+
+    count = 0
+    trials = 10000
+    rate = 0.20
+
+    for _ in range(trials):
+        if random.random() < rate:
+            count += 1
+
+    # Allow 5% variance
+    assert 0.18 * trials <= count <= 0.22 * trials
+
+
+def test_review_queue_disabled_by_default():
+    """Review queue is opt-in (enable_review_queue=False by default)."""
+    from config.pipeline_config import PipelineConfig
+
+    config = PipelineConfig()
+    assert config.enable_review_queue is False
+    assert config.review_sample_rate == 0.20
+    assert config.review_high_score_threshold is None
+    assert config.review_low_score_threshold is None
+    assert config.review_send_email is True
+
+
+def test_should_trigger_random_sample():
+    """Random sampling triggers with correct reason."""
+    from config.pipeline_config import PipelineConfig
+    from pipeline.evaluation_worker import EvaluationWorker
+    from pipeline.event_models import EvaluationBundle, ModuleEvaluationResult
+
+    config = PipelineConfig(
+        enable_review_queue=True,
+        review_sample_rate=1.0,  # 100% for deterministic testing
+        review_high_score_threshold=None,
+        review_low_score_threshold=None,
+    )
+    worker = EvaluationWorker(config)
+
+    # Create mock event and bundle
+    event = Mock()
+    event.trace_id = "test-trace"
+    event.project_id = "test_project"
+
+    bundle = EvaluationBundle(
+        hallucination=ModuleEvaluationResult(
+            label="safe",
+            score=0.5,
+            confidence=0.9,
+            explanation="test",
+            raw={},
+        )
+    )
+
+    should_trigger, reason = worker._should_trigger_review(event, bundle)
+
+    assert should_trigger is True
+    assert reason == "random_sample"
+
+
+def test_high_score_threshold_none_disables():
+    """None threshold means disabled."""
+    from config.pipeline_config import PipelineConfig
+    from pipeline.evaluation_worker import EvaluationWorker
+    from pipeline.event_models import EvaluationBundle, ModuleEvaluationResult
+
+    config = PipelineConfig(
+        enable_review_queue=True,
+        review_sample_rate=0.0,  # Disable random
+        review_high_score_threshold=None,  # Disabled
+        review_low_score_threshold=None,
+    )
+    worker = EvaluationWorker(config)
+
+    event = Mock()
+    event.trace_id = "test-trace"
+    event.project_id = "test_project"
+
+    # High score (1.0) should NOT trigger when threshold is None
+    bundle = EvaluationBundle(
+        hallucination=ModuleEvaluationResult(
+            label="hallucinated",
+            score=1.0,
+            confidence=0.9,
+            explanation="test",
+            raw={},
+        )
+    )
+
+    should_trigger, reason = worker._should_trigger_review(event, bundle)
+
+    assert should_trigger is False
+    assert reason == ""
+
+
+def test_should_trigger_high_score():
+    """High score threshold triggers review."""
+    from config.pipeline_config import PipelineConfig
+    from pipeline.evaluation_worker import EvaluationWorker
+    from pipeline.event_models import EvaluationBundle, ModuleEvaluationResult
+
+    config = PipelineConfig(
+        enable_review_queue=True,
+        review_sample_rate=0.0,
+        review_high_score_threshold=0.8,
+        review_low_score_threshold=None,
+    )
+    worker = EvaluationWorker(config)
+
+    event = Mock()
+    event.trace_id = "test-trace"
+    event.project_id = "test_project"
+
+    bundle = EvaluationBundle(
+        hallucination=ModuleEvaluationResult(
+            label="hallucinated",
+            score=0.85,  # Above threshold
+            confidence=0.9,
+            explanation="test",
+            raw={},
+        )
+    )
+
+    should_trigger, reason = worker._should_trigger_review(event, bundle)
+
+    assert should_trigger is True
+    assert reason == "high_risk_score"
+
+
+def test_should_trigger_low_score():
+    """Low score threshold triggers review."""
+    from config.pipeline_config import PipelineConfig
+    from pipeline.evaluation_worker import EvaluationWorker
+    from pipeline.event_models import EvaluationBundle, ModuleEvaluationResult
+
+    config = PipelineConfig(
+        enable_review_queue=True,
+        review_sample_rate=0.0,
+        review_high_score_threshold=None,
+        review_low_score_threshold=0.2,
+    )
+    worker = EvaluationWorker(config)
+
+    event = Mock()
+    event.trace_id = "test-trace"
+    event.project_id = "test_project"
+
+    bundle = EvaluationBundle(
+        hallucination=ModuleEvaluationResult(
+            label="safe",
+            score=0.15,  # Below threshold
+            confidence=0.9,
+            explanation="test",
+            raw={},
+        )
+    )
+
+    should_trigger, reason = worker._should_trigger_review(event, bundle)
+
+    assert should_trigger is True
+    assert reason == "low_risk_score"
+
+
+def test_should_trigger_combined_reasons():
+    """Multiple triggers combine reasons with comma separator."""
+    from config.pipeline_config import PipelineConfig
+    from pipeline.evaluation_worker import EvaluationWorker
+    from pipeline.event_models import EvaluationBundle, ModuleEvaluationResult
+
+    config = PipelineConfig(
+        enable_review_queue=True,
+        review_sample_rate=1.0,  # Always triggers random
+        review_high_score_threshold=0.8,
+        review_low_score_threshold=None,
+    )
+    worker = EvaluationWorker(config)
+
+    event = Mock()
+    event.trace_id = "test-trace"
+    event.project_id = "test_project"
+
+    bundle = EvaluationBundle(
+        hallucination=ModuleEvaluationResult(
+            label="hallucinated",
+            score=0.85,  # Above high threshold AND random triggers
+            confidence=0.9,
+            explanation="test",
+            raw={},
+        )
+    )
+
+    should_trigger, reason = worker._should_trigger_review(event, bundle)
+
+    assert should_trigger is True
+    assert reason == "random_sample,high_risk_score"
+
+
+def test_enqueue_for_review_creates_queue_item(tmp_path: Path):
+    """Verify _enqueue_for_review() creates ReviewQueueItem."""
+    from config.pipeline_config import PipelineConfig
+    from pipeline.evaluation_worker import EvaluationWorker
+    from pipeline.event_models import EvaluationBundle, ModuleEvaluationResult
+    from review.queue import ReviewQueue
+
+    config = PipelineConfig(
+        enable_review_queue=True,
+        review_sample_rate=1.0,
+        review_send_email=False,  # Disable email for test
+    )
+    worker = EvaluationWorker(config, storage_root=tmp_path)
+
+    event = Mock()
+    event.trace_id = "test-trace"
+    event.project_id = "test_project"
+    event.output_text = "Test model response"
+
+    bundle = EvaluationBundle(
+        hallucination=ModuleEvaluationResult(
+            label="safe",
+            score=0.5,
+            confidence=0.9,
+            explanation="test",
+            raw={},
+        )
+    )
+
+    # Mock the queue to capture the call
+    with patch.object(ReviewQueue, "enqueue") as mock_enqueue:
+        mock_item = Mock()
+        mock_item.id = "test-item-id"
+        mock_item.review_token = "test-token-123"
+        mock_enqueue.return_value = mock_item
+
+        worker._enqueue_for_review(event, bundle, "random_sample")
+
+        # Verify enqueue was called
+        mock_enqueue.assert_called_once()
+        call_kwargs = mock_enqueue.call_args[1]
+
+        assert call_kwargs["evaluation_id"] == "test-trace"
+        assert call_kwargs["module_type"] == "hallucination"
+        assert call_kwargs["trigger_reason"] == "random_sample"
+        assert call_kwargs["raw_score"] == 0.5
+        assert call_kwargs["model_response"] == "Test model response"
+
+
+def test_enqueue_with_email_disabled(tmp_path: Path):
+    """When review_send_email=False, no email is sent."""
+    from config.pipeline_config import PipelineConfig
+    from pipeline.evaluation_worker import EvaluationWorker
+    from pipeline.event_models import EvaluationBundle, ModuleEvaluationResult
+    from review.emailer import Emailer
+
+    config = PipelineConfig(
+        enable_review_queue=True,
+        review_sample_rate=1.0,
+        review_send_email=False,
+    )
+    worker = EvaluationWorker(config, storage_root=tmp_path)
+
+    event = Mock()
+    event.trace_id = "test-trace"
+    event.project_id = "test_project"
+    event.output_text = "Test"
+
+    bundle = EvaluationBundle(
+        hallucination=ModuleEvaluationResult(
+            label="safe",
+            score=0.5,
+            confidence=0.9,
+            explanation="test",
+            raw={},
+        )
+    )
+
+    with patch.object(Emailer, "send_review_alert") as mock_send:
+        worker._enqueue_for_review(event, bundle, "random_sample")
+
+        # Verify email was NOT sent
+        mock_send.assert_not_called()
+
+
+def test_enqueue_sends_email_when_enabled(tmp_path: Path):
+    """When review_send_email=True, email is sent."""
+    from config.pipeline_config import PipelineConfig
+    from pipeline.evaluation_worker import EvaluationWorker
+    from pipeline.event_models import EvaluationBundle, ModuleEvaluationResult
+    from review.queue import ReviewQueue
+    from review.emailer import Emailer
+
+    config = PipelineConfig(
+        enable_review_queue=True,
+        review_sample_rate=1.0,
+        review_send_email=True,
+    )
+    worker = EvaluationWorker(config, storage_root=tmp_path)
+
+    event = Mock()
+    event.trace_id = "test-trace"
+    event.project_id = "test_project"
+    event.output_text = "Test"
+
+    bundle = EvaluationBundle(
+        hallucination=ModuleEvaluationResult(
+            label="safe",
+            score=0.5,
+            confidence=0.9,
+            explanation="test",
+            raw={},
+        )
+    )
+
+    # Mock both queue and emailer
+    with patch.object(ReviewQueue, "enqueue") as mock_enqueue:
+        mock_item = Mock()
+        mock_item.id = "test-item-id"
+        mock_item.review_token = "test-token"
+        mock_enqueue.return_value = mock_item
+
+        with patch.object(Emailer, "send_review_alert") as mock_send:
+            worker._enqueue_for_review(event, bundle, "random_sample")
+
+            # Verify email WAS sent with correct parameters
+            mock_send.assert_called_once_with(
+                project="test_project",
+                item_id="test-item-id",
+                module_type="hallucination",
+                trigger_reason="random_sample",
+                raw_score=0.5,
+                token="test-token",
+            )

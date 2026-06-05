@@ -274,6 +274,13 @@ pipeline:
     enable_hallucination_eval: true
     enable_adversarial_eval: false
     project_id: ""
+    # Human Review Queue (auto-trigger)
+    review:
+        enabled: false           # Set to true to enable auto-trigger
+        sample_rate: 0.20         # 20% random sampling (0.0-1.0)
+        high_score_threshold: null  # Review scores >= this (null = disabled)
+        low_score_threshold: null   # Review scores <= this (null = disabled)
+        send_email: true          # Send email notifications to reviewers
 
 storage: sqlite
 """
