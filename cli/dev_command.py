@@ -96,7 +96,7 @@ def dev_start(
                 log_level="warning",
             )
         except ImportError:
-            typer.echo("  [api] uvicorn not installed — skipping", err=True)
+            typer.echo("  [api] uvicorn not installed - this should not happen. Reinstall: pip install --force-reinstall aiguard-safety", err=True)
         except Exception as exc:
             typer.echo(f"  [api] error: {exc}", err=True)
 

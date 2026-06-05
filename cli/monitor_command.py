@@ -48,8 +48,8 @@ def monitor_start(
         import uvicorn
     except ImportError:
         typer.echo(
-            "Error: uvicorn is not installed.  Run:\n"
-            "  pip install 'aiguard[monitoring]'",
+            "Error: uvicorn is not installed.  This should not happen - please reinstall:\n"
+            "  pip install --force-reinstall aiguard-safety",
             err=True,
         )
         raise typer.Exit(code=1)

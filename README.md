@@ -49,12 +49,6 @@ AIGuard is a local-first, modular framework for evaluating, monitoring, and gove
 # Core — includes aiguard.chat(), CLI, adversarial, hallucination, storage
 pip install aiguard-safety
 
-# + Human review server
-pip install "aiguard-safety[review]"
-
-# + Monitoring API
-pip install "aiguard-safety[monitoring]"
-
 # + HuggingFace dataset ingestion
 pip install "aiguard-safety[huggingface]"
 
@@ -1051,9 +1045,9 @@ The response is returned to the caller **before** the trace is processed.
 ### 11.2 Install
 
 ```bash
-pip install -e ".[sdk]"
+pip install -e .
 # or
-pip install aiguard litellm
+pip install aiguard-safety
 ```
 
 ### 11.3 Basic usage

@@ -75,7 +75,7 @@ def cmd_serve(args: argparse.Namespace) -> None:
     except ImportError:
         print(
             "ERROR: uvicorn is not installed.\n"
-            "Install it with:  pip install 'aiguard[review]'",
+            "This should not happen - please reinstall: pip install --force-reinstall aiguard-safety",
             file=sys.stderr,
         )
         sys.exit(1)

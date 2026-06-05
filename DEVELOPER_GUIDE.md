@@ -287,14 +287,8 @@ Beyond/
 # Core — CLI + chat() + adversarial evaluation + datasets (litellm and datasets included)
 pip install aiguard-safety
 
-# With monitoring API
-pip install "aiguard-safety[monitoring]"
-
-# With human review server
-pip install "aiguard-safety[review]"
-
-# Everything
-pip install "aiguard-safety[monitoring,review]"
+# Everything is included in the base installation
+# (monitoring API, human review server, SDK, and all core features)
 ```
 
 > **Note:** `litellm` and `datasets` are both **core dependencies** — they are installed

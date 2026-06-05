@@ -50,7 +50,10 @@ class ReviewServer:
         try:
             import uvicorn
         except ImportError as exc:
-            raise RuntimeError("uvicorn is required. Install with: pip install 'aiguard[review]'") from exc
+            raise RuntimeError(
+                "uvicorn is required but not installed. "
+                "This should not happen - please reinstall: pip install --force-reinstall aiguard-safety"
+            ) from exc
 
         from review.cli import _resolve_port
 
