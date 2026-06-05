@@ -101,6 +101,14 @@ class ResponseHeuristicScorer:
     def _normalize_text(self, text: str) -> str:
         """Normalize text for flexible matching."""
         normalized = text.lower()
+        
+        # Normalize Unicode apostrophes/quotes to ASCII
+        normalized = normalized.replace('\u2019', "'")  # Right single quotation mark (')
+        normalized = normalized.replace('\u2018', "'")  # Left single quotation mark (')
+        normalized = normalized.replace('\u201c', '"')  # Left double quotation mark (")
+        normalized = normalized.replace('\u201d', '"')  # Right double quotation mark (")
+        normalized = normalized.replace('\u0092', "'")  # Windows-1252 right single quote
+        
         # Expand contractions to full form for matching
         normalized = re.sub(r"can't\b", "cannot", normalized)
         normalized = re.sub(r"won't\b", "will not", normalized)
