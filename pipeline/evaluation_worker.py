@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import random
+import re
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -58,13 +59,29 @@ def _risk_label(overall_risk: float) -> str:
 
 
 def _prompt_from_messages(messages: list) -> str:
-    """Extract a plain-text prompt string from a list of message dicts."""
+    """Extract a plain-text prompt string from a list of message dicts.
+    
+    Strips role prefixes (system:, user:, etc.) to prevent false positives
+    from obfuscation patterns matching role labels.
+    """
     parts = []
     for m in messages or []:
         role = m.get("role", "")
         content = m.get("content", "")
         parts.append(f"{role}: {content}" if role else content)
-    return "\n".join(parts)
+    
+    full_prompt = "\n".join(parts)
+    
+    # Strip role prefixes: "system:", "user:", "assistant:", "function:", "tool:"
+    # Use MULTILINE and IGNORECASE flags for robust matching
+    cleaned = re.sub(
+        r'^(system|user|assistant|function|tool):\s*',
+        '',
+        full_prompt,
+        flags=re.MULTILINE | re.IGNORECASE
+    )
+    
+    return cleaned
 
 
 # ---------------------------------------------------------------------------
