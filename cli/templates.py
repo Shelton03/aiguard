@@ -8,8 +8,10 @@ def github_template(project: str) -> str:
     return f"""name: AIGuard Evaluation
 
 on:
-  push:
   pull_request:
+    branches: [main]
+  push:
+    branches: [main]
 
 jobs:
   aiguard:
@@ -41,8 +43,11 @@ def gitlab_template(project: str) -> str:
   image: python:3.11
   stage: test
   script:
-    - pip install aiguard
-    - aiguard evaluate --project {project}
+    - pip install aiguard-safety
+    - aiguard evaluate --project {project} --mode quick
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
   artifacts:
     when: always
     expire_in: 30 days
