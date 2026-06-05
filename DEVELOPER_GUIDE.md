@@ -388,6 +388,59 @@ nohup aiguard review serve --port 8123 > review.log 2>&1 &
 
 ---
 
+## Dependency Version Compatibility
+
+### Why Versions Are Pinned
+
+The review UI uses Starlette's `TemplateResponse()` method. Starlette 1.x (released 2025)
+introduced a breaking API change:
+
+- **Old API (0.x)**: `TemplateResponse(name, context)`
+- **New API (1.x)**: `TemplateResponse(request, name, context)`
+
+Our code uses the 0.x API for backward compatibility. FastAPI 0.115.x is pinned because
+it requires Starlette 0.37-0.38, which supports the old API.
+
+### Pin Strategy
+
+| Package | Pin | Reason |
+|---------|-----|--------|
+| FastAPI | `>=0.115.0,<0.116.0` | Ensures Starlette 0.38.x |
+| Starlette | `>=0.38.0,<0.39.0` | Last version with old API support |
+| uvicorn | `>=0.29.0,<0.30.0` | Prevents major version breaking changes |
+| jinja2 | `>=3.1.0,<4.0.0` | Prevents major version breaking changes |
+| python-multipart | `>=0.0.9,<0.1.0` | Prevents breaking changes |
+
+### Upgrading Dependencies
+
+To upgrade dependencies safely:
+
+1. **Test in isolation**: Upgrade one package at a time
+2. **Verify review UI**: Run `aiguard-review serve` and test all endpoints
+3. **Check TemplateResponse calls**: Verify all 9 calls in `review/routes.py` work
+4. **Run test suite**: Ensure all tests pass
+5. **Update version pins**: Update `pyproject.toml` and this document
+6. **Update changelog**: Document the change
+
+### Known Breaking Changes
+
+- **Starlette 1.0+**: Requires `request` as first argument to `TemplateResponse()`
+- **FastAPI 0.120+**: May require Starlette 1.x (not yet tested)
+- **Jinja2 4.0+**: Potential template syntax changes (not yet released)
+
+### Verifying Dependency Versions
+
+Use the included script to verify correct versions:
+
+```bash
+python verify_versions.py
+```
+
+This script checks that all dependencies match the expected versions and reports
+any mismatches or conflicts.
+
+---
+
 ## 5. Configuration (`aiguard.yaml`)
 
 `aiguard.yaml` is auto-detected from the current working directory. All fields have safe defaults.

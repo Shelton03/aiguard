@@ -66,6 +66,20 @@ python -m venv .venv && source .venv/bin/activate
 pip install -e ".[monitoring,review,huggingface]"
 ```
 
+## Version Compatibility
+
+AIGuard 0.7.5.8+ uses pinned dependencies to ensure stability and prevent breaking changes:
+
+| Package | Version | Rationale |
+|---------|---------|-----------|
+| FastAPI | 0.115.x | Uses Starlette 0.38.x (old API compatible) |
+| Starlette | 0.38.x | Prevents 1.x breaking changes in TemplateResponse() |
+| uvicorn | 0.29.x | Prevents potential breaking changes |
+| Jinja2 | 3.x | Prevents major version issues |
+| python-multipart | 0.0.x | Prevents breaking changes |
+
+These pins ensure the review UI (`aiguard-review serve`) works correctly across all installations.
+
 **Environment variables used at runtime**
 
 | Variable | Default | Purpose |
