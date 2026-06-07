@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 import time
 import urllib.error
@@ -11,6 +12,8 @@ from typing import Any, Dict, Optional
 
 from config.judge_config import JudgeConfig
 from hallucination.taxonomy import HallucinationCategory, HallucinationSource, HallucinationSubtype
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass

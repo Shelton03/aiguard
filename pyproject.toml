@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aiguard-safety"
-version = "0.7.5.14"  # Add hallucination judge debug logging and fix warm-up payload
+version = "0.7.5.15"  # Fix missing logging import in hallucination judge
 description = "AIGuard: model-agnostic safety evaluation toolkit with PDF reports (adversarial, evaluator, hallucination)"
 authors = [{ name = "Shelton Mutambirwa", email = "sheltonmutambirwa@gmail.com" }]
 readme = { file = "README.md", content-type = "text/markdown" }
