@@ -118,7 +118,7 @@ def load_sdk_config(
             raw["ingest_url"] = monitoring_section.get(
                 "ingest_url", f"http://localhost:{api_port}/traces/ingest"
             )
-            raw["ingest_timeout_s"] = monitoring_section.get("ingest_timeout_s", 2.0)
+            raw["ingest_timeout_s"] = monitoring_section.get("ingest_timeout_s", 30.0)
 
         except Exception:
             # If the YAML file is malformed / unreadable, fall back to defaults

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aiguard-safety"
-version = "0.7.5.12"  # Fix false positive attack detection from role prefix matching
+version = "0.7.5.13"  # Fix timeout and rejudge project_id issues
 description = "AIGuard: model-agnostic safety evaluation toolkit with PDF reports (adversarial, evaluator, hallucination)"
 authors = [{ name = "Shelton Mutambirwa", email = "sheltonmutambirwa@gmail.com" }]
 readme = { file = "README.md", content-type = "text/markdown" }
@@ -50,6 +50,9 @@ Source = "https://github.com/Shelton03/aiguard"
 review = []
 sdk = []
 monitoring = []
+dev = [
+    "pytest-asyncio>=0.21.0",
+]
 
 [project.scripts]
 aiguard = "cli.main:app"
@@ -80,3 +83,6 @@ exclude = ["aiguard_env*", "tests*", "*.egg-info*"]
 "hallucination"    = ["py.typed"]
 "review"           = ["templates/*.html", "static/*.css"]
 "monitoring"       = ["ui/**", "ui/**/*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"

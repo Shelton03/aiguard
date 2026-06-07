@@ -526,6 +526,7 @@ def test_enqueue_with_email_disabled(tmp_path: Path):
 
 def test_enqueue_sends_email_when_enabled(tmp_path: Path):
     """When review_send_email=True, email is sent."""
+    import threading
     from config.pipeline_config import PipelineConfig
     from pipeline.evaluation_worker import EvaluationWorker
     from pipeline.event_models import EvaluationBundle, ModuleEvaluationResult
@@ -561,18 +562,38 @@ def test_enqueue_sends_email_when_enabled(tmp_path: Path):
         mock_item.review_token = "test-token"
         mock_enqueue.return_value = mock_item
 
-        with patch.object(Emailer, "send_review_alert") as mock_send:
-            worker._enqueue_for_review(event, bundle, "random_sample")
+        # Patch threading.Thread to call target immediately
+        original_thread = threading.Thread
+        executed_targets = []
+        
+        def mock_thread_factory(target, **kwargs):
+            executed_targets.append(target)
+            mock_thread = Mock()
+            mock_thread.start = Mock()
+            return mock_thread
+        
+        with patch.object(threading, "Thread", side_effect=mock_thread_factory):
+            with patch.object(Emailer, "send_review_alert") as mock_send:
+                with patch.object(ReviewQueue, "enqueue") as mock_enqueue:
+                    mock_item = Mock()
+                    mock_item.id = "test-item-id"
+                    mock_item.review_token = "test-token"
+                    mock_enqueue.return_value = mock_item
 
-            # Verify email WAS sent with correct parameters
-            mock_send.assert_called_once_with(
-                project="test_project",
-                item_id="test-item-id",
-                module_type="hallucination",
-                trigger_reason="random_sample",
-                raw_score=0.5,
-                token="test-token",
-            )
+                    worker._enqueue_for_review(event, bundle, "random_sample")
+
+                    # Execute the email target synchronously
+                    assert len(executed_targets) == 1
+                    executed_targets[0]()
+
+                    mock_send.assert_called_once_with(
+                        project="test_project",
+                        item_id="test-item-id",
+                        module_type="hallucination",
+                        trigger_reason="random_sample",
+                        raw_score=0.5,
+                        token="test-token",
+                    )
 
 
 def test_emailer_uses_storage_root_for_config(tmp_path: Path):

@@ -108,6 +108,9 @@ def rejudge_trace(
     if trace is None:
         raise HTTPException(status_code=404, detail=f"Trace '{trace_id}' not found.")
 
+    # Use trace's original project_id to ensure evaluations are saved to correct DB
+    original_project_id = trace.get("project_id") or "default"
+
     prompt = trace.get("prompt") or ""
     metadata = trace.get("metadata") or {}
     trace_dict = {
@@ -126,7 +129,7 @@ def rejudge_trace(
 
     config = load_pipeline_config()
     worker = EvaluationWorker(config=config)
-    event = TraceCreatedEvent.from_trace_dict(trace_dict, project_id=config.project_id)
+    event = TraceCreatedEvent.from_trace_dict(trace_dict, project_id=original_project_id)
     evaluated = worker.process_batch([event], force_judge=force_judge)
 
     return {

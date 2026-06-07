@@ -158,7 +158,7 @@ def _build_http_ingest_handler(url: str, timeout_s: float) -> TraceHandler:
     return _handler
 
 
-def enable_http_ingest(url: str, timeout_s: float = 2.0) -> None:
+def enable_http_ingest(url: str, timeout_s: float = 30.0) -> None:
     """Register a handler that POSTs traces to the monitoring API.
 
     This is used for cross-process ingestion when the SDK and pipeline

@@ -1088,7 +1088,8 @@ monitoring:
   enabled: true
   sampling_rate: 0.2     # trace ~20% of requests
   ingest_url: http://localhost:8080/traces/ingest
-  ingest_timeout_s: 2.0
+  ingest_timeout_s: 30.0  # Timeout for HTTP ingest (default: 30s)
+                          # Increase if judge evaluations take longer than 30s
   api:
     host: "0.0.0.0"
     port: 8080
