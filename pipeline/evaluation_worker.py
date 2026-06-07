@@ -605,7 +605,7 @@ class EvaluationWorker:
         raw = {
             "patterns_found": hits,
             "score": score,
-            "category": "prompt_injection" if hits else "safe",
+            "category": "unknown",
             "subtypes": heuristic_subtypes,
             "heuristic_only": True,
         }

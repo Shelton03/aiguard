@@ -91,7 +91,12 @@ class Judge:
         )
 
     def warm_up(self) -> bool:
-        payload = self._build_payload("Warm-up ping", "", None, None)
+        payload = self._build_payload(
+            "Warm-up ping", 
+            "The sky is blue.",
+            None, 
+            None
+        )
         raw = self._post(payload)
         return bool(raw)
 
@@ -178,6 +183,12 @@ class Judge:
         api_key = self._config.resolve_api_key()
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
+        
+        logger.info(
+            "Hallucination judge _post: sending %d bytes to %s",
+            len(data), endpoint
+        )
+        
         req = urllib.request.Request(endpoint, data=data, headers=headers, method="POST")
         for attempt, delay in enumerate([0, 5, 10, 15]):
             if attempt:
@@ -185,10 +196,20 @@ class Judge:
             try:
                 with urllib.request.urlopen(req, timeout=self._config.timeout_s) as resp:
                     body = resp.read().decode("utf-8")
+                
+                logger.info(
+                    "Hallucination judge _post: HTTP %d, received %d bytes, raw: %.200s...",
+                    resp.status, len(body), body
+                )
                 break
-            except urllib.error.HTTPError:
+            except urllib.error.HTTPError as e:
+                logger.error(
+                    "Hallucination judge _post: HTTP %d error - %s",
+                    e.code, e.read().decode("utf-8")[:200]
+                )
                 body = None
-            except Exception:
+            except Exception as e:
+                logger.exception("Hallucination judge _post: request failed")
                 body = None
         if not body:
             return None
@@ -206,15 +227,27 @@ class Judge:
     def _parse_json(self, text: str) -> Optional[Dict[str, Any]]:
         if not text:
             return None
+        original = text
         cleaned = text.strip()
         if cleaned.startswith("```"):
             cleaned = cleaned.strip("`")
             cleaned = cleaned.replace("json\n", "", 1).replace("JSON\n", "", 1).strip()
+            
+            logger.info(
+                "Hallucination judge _parse_json: stripped markdown wrapper, original=%d chars, now=%d chars",
+                len(original), len(cleaned)
+            )
+        
         parsed = self._try_parse_json(cleaned)
         if parsed is not None:
+            logger.info("Hallucination judge _parse_json: successfully parsed JSON with keys: %s", list(parsed.keys()))
             return parsed
         match = re.search(r"\{.*\}", cleaned, re.DOTALL)
         if not match:
+            logger.warning(
+                "Hallucination judge _parse_json: no JSON object found in response (first 300 chars): %.300s",
+                cleaned
+            )
             return None
         return self._try_parse_json(match.group(0))
 
