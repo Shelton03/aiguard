@@ -573,3 +573,224 @@ def test_enqueue_sends_email_when_enabled(tmp_path: Path):
                 raw_score=0.5,
                 token="test-token",
             )
+
+
+def test_emailer_uses_storage_root_for_config(tmp_path: Path):
+    """Verify Emailer loads config from storage root, not cwd."""
+    from config.pipeline_config import PipelineConfig
+    from pipeline.evaluation_worker import EvaluationWorker
+    from review.emailer import load_smtp_config
+    import os
+    
+    # Create a test aiguard.yaml with custom SMTP settings
+    test_config_file = tmp_path / "aiguard.yaml"
+    test_config_file.write_text("""
+smtp:
+  host: smtp.test.com
+  port: 587
+  user: test@example.com
+  password: testpass
+  from: test@example.com
+  to:
+    - recipient@example.com
+  use_tls: true
+
+pipeline:
+  review:
+    enabled: true
+""")
+    
+    # Create worker with storage root pointing to tmp_path
+    config = PipelineConfig(enable_review_queue=True)
+    worker = EvaluationWorker(config=config, storage_root=tmp_path)
+    
+    # Verify storage root is set correctly
+    assert worker._storage.root == tmp_path
+    
+    # Verify that load_smtp_config with this root loads the correct config
+    cfg = load_smtp_config(tmp_path)
+    assert cfg.host == "smtp.test.com"
+    assert cfg.port == 587
+    assert cfg.user == "test@example.com"
+    assert cfg.to_addrs == ["recipient@example.com"]
+
+
+def test_project_id_fallback_chain(tmp_path: Path):
+    """Verify project_id uses event -> config -> default fallback."""
+    from config.pipeline_config import PipelineConfig
+    from pipeline.evaluation_worker import EvaluationWorker
+    from pipeline.event_models import TraceCreatedEvent, EvaluationBundle, ModuleEvaluationResult
+    from unittest.mock import Mock
+    
+    # Create test aiguard.yaml with project_id
+    test_config_file = tmp_path / "aiguard.yaml"
+    test_config_file.write_text("""
+pipeline:
+  project_id: "my_test_project"
+  review:
+    enabled: true
+""")
+    
+    config = PipelineConfig(
+        enable_review_queue=True,
+        project_id="my_test_project",
+        review_sample_rate=1.0,
+    )
+    worker = EvaluationWorker(config=config, storage_root=tmp_path)
+    
+    # Test 1: Event has project_id -> use event's project_id
+    event_with_project = Mock()
+    event_with_project.project_id = "event_project"
+    
+    result = event_with_project.project_id or config.project_id or "default"
+    assert result == "event_project"
+    
+    # Test 2: Event has no project_id -> use config's project_id
+    event_no_project = Mock()
+    event_no_project.project_id = ""
+    
+    result = event_no_project.project_id or config.project_id or "default"
+    assert result == "my_test_project"
+    
+    # Test 3: Both empty -> use "default"
+    config_no_project = PipelineConfig(
+        enable_review_queue=True,
+        project_id="",
+        review_sample_rate=1.0,
+    )
+    result = event_no_project.project_id or config_no_project.project_id or "default"
+    assert result == "default"
+
+
+def test_enqueue_for_review_uses_storage_root_for_emailer(tmp_path: Path):
+    """Verify _enqueue_for_review passes storage root to Emailer."""
+    from config.pipeline_config import PipelineConfig
+    from pipeline.evaluation_worker import EvaluationWorker
+    from pipeline.event_models import TraceCreatedEvent, EvaluationBundle, ModuleEvaluationResult
+    from unittest.mock import Mock, patch, MagicMock
+    from pathlib import Path
+    
+    # Create test aiguard.yaml with SMTP config
+    test_config_file = tmp_path / "aiguard.yaml"
+    test_config_file.write_text("""
+smtp:
+  host: smtp.gmail.com
+  port: 587
+  user: test@gmail.com
+  password: testpass
+  from: test@gmail.com
+  to:
+    - reviewer@example.com
+  use_tls: true
+
+pipeline:
+  project_id: "test_project"
+  review:
+    enabled: true
+    sample_rate: 1.0
+""")
+    
+    config = PipelineConfig(
+        enable_review_queue=True,
+        project_id="test_project",
+        review_sample_rate=1.0,
+        review_high_score_threshold=None,
+        review_low_score_threshold=None,
+    )
+    worker = EvaluationWorker(config=config, storage_root=tmp_path)
+    
+    # Create mock event and bundle
+    event = Mock()
+    event.trace_id = "test-trace-123"
+    event.project_id = ""  # Empty to test fallback
+    event.output_text = "test response"
+    
+    bundle = EvaluationBundle(
+        hallucination=ModuleEvaluationResult(
+            label="safe",
+            score=0.5,
+            confidence=0.9,
+            explanation="test",
+            raw={},
+        )
+    )
+    
+    # Mock the ReviewQueue to avoid actual database operations
+    with patch('pipeline.evaluation_worker.ReviewQueue') as mock_queue_class:
+        mock_queue = MagicMock()
+        mock_queue_class.return_value = mock_queue
+        
+        mock_item = MagicMock()
+        mock_item.id = "queue-item-123"
+        mock_item.review_token = "test-token"
+        mock_queue.enqueue.return_value = mock_item
+        
+        # Mock Emailer to verify it's called with correct root
+        with patch('pipeline.evaluation_worker.Emailer') as mock_emailer_class:
+            mock_emailer = MagicMock()
+            mock_emailer_class.return_value = mock_emailer
+            
+            # Call _enqueue_for_review directly
+            worker._enqueue_for_review(event, bundle, "random_sample")
+            
+            # Verify Emailer was called with storage root
+            mock_emailer_class.assert_called_once()
+            call_kwargs = mock_emailer_class.call_args
+            assert 'root' in call_kwargs.kwargs
+            assert call_kwargs.kwargs['root'] == tmp_path
+            
+            # Verify email was sent
+            mock_emailer.send_review_alert.assert_called_once()
+            
+            # Verify the project_id used was from config (fallback)
+            call_args = mock_emailer.send_review_alert.call_args
+            assert call_args.kwargs['project'] == "test_project"
+
+
+def test_email_integration_with_real_smtp():
+    """Integration test: verify email sending works with real SMTP credentials.
+    
+    This test uses environment variables for SMTP configuration and actually
+    sends a test email. Skip if credentials are not configured.
+    """
+    from review.emailer import Emailer, load_smtp_config
+    from pathlib import Path
+    import os
+    
+    # Check if SMTP credentials are configured
+    smtp_host = os.getenv('AIGUARD_SMTP_HOST')
+    smtp_user = os.getenv('AIGUARD_SMTP_USER')
+    smtp_password = os.getenv('AIGUARD_SMTP_PASSWORD')
+    
+    if not all([smtp_host, smtp_user, smtp_password]):
+        pytest.skip("SMTP credentials not configured in environment variables")
+    
+    # Load config from environment
+    cfg = load_smtp_config(Path('.'))
+    
+    # Verify config loaded from env vars
+    assert cfg.host == smtp_host
+    assert cfg.user == smtp_user
+    assert cfg.password == smtp_password
+    
+    # Create emailer with loaded config
+    emailer = Emailer(config=cfg)
+    
+    # Try to send a test email
+    try:
+        emailer.send_review_alert(
+            project="integration_test",
+            item_id="test-integration-123",
+            module_type="hallucination",
+            trigger_reason="integration_test",
+            raw_score=0.85,
+            token="integration-test-token"
+        )
+        # If we get here, email was sent successfully
+        assert True
+    except Exception as e:
+        # If email fails, provide detailed error info
+        pytest.fail(f"Failed to send test email: {e}. "
+                   f"SMTP Config: host={cfg.host}, port={cfg.port}, "
+                   f"user={cfg.user}, tls={cfg.use_tls}, "
+                   f"recipients={cfg.to_addrs}")

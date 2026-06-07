@@ -34,3 +34,8 @@ htmlcov/
 # SQLite databases
 *.db
 .aiguard/
+
+# Environment variables (credentials)
+.env
+.env.local
+.env.*.local

@@ -1163,6 +1163,165 @@ aiguard review list <project>     # list pending items as JSON
 aiguard review calibrate <project> # force calibration update
 ```
 
+#### Email Alerts for Review Triggers
+
+The human review feature can send email notifications when evaluations trigger review alerts.
+
+##### Configuration Options
+
+**Option 1: Environment Variables (Recommended)**
+
+Set these environment variables before running AIGuard:
+
+```bash
+# SMTP Server Settings
+export AIGUARD_SMTP_HOST=smtp.gmail.com
+export AIGUARD_SMTP_PORT=587
+export AIGUARD_SMTP_USER=your_email@gmail.com
+export AIGUARD_SMTP_PASSWORD=your_app_password
+export AIGUARD_SMTP_FROM=your_email@gmail.com
+export AIGUARD_SMTP_TO=reviewer1@example.com,reviewer2@example.com
+export AIGUARD_SMTP_USE_TLS=true
+
+# Review Base URL (for links in emails)
+export AIGUARD_REVIEW_BASE_URL=http://localhost:8000
+```
+
+**Option 2: Config File (aiguard.yaml)**
+
+Add SMTP configuration to your `aiguard.yaml`:
+
+```yaml
+smtp:
+  host: smtp.gmail.com
+  port: 587
+  user: your_email@gmail.com
+  password: your_app_password
+  from: your_email@gmail.com
+  to:
+    - reviewer1@example.com
+    - reviewer2@example.com
+  use_tls: true
+
+review:
+  base_url: "http://localhost:8000"
+```
+
+**Option 3: Config File (aiguard.toml)**
+
+Alternatively, use `aiguard.toml`:
+
+```toml
+[smtp]
+host = "smtp.gmail.com"
+port = 587
+user = "your_email@gmail.com"
+password = "your_app_password"
+from = "your_email@gmail.com"
+to = ["reviewer1@example.com", "reviewer2@example.com"]
+use_tls = true
+
+[review]
+base_url = "http://localhost:8000"
+```
+
+##### Gmail Setup (Most Common Use Case)
+
+If using Gmail, you must use an **App Password**, not your regular password:
+
+1. **Enable 2-Factor Authentication**:
+   - Go to https://myaccount.google.com/security
+   - Enable "2-Step Verification"
+
+2. **Generate App Password**:
+   - Go to https://myaccount.google.com/apppasswords
+   - Select app: **Mail**
+   - Select device: **Other (Custom name)** - e.g., "AIGuard Server"
+   - Click **Generate**
+   - Copy the 16-character password (e.g., `abcd efgh ijkl mnop`)
+   - **Important**: Use the password **without spaces**: `abcdefghijklmnop`
+
+3. **Configure AIGuard**:
+   ```bash
+   export AIGUARD_SMTP_USER=your_email@gmail.com
+   export AIGUARD_SMTP_PASSWORD=abcdefghijklmnop  # No spaces!
+   ```
+
+##### Troubleshooting
+
+**Error: "530 5.7.0 Authentication Required"**
+
+*Causes*:
+- Using regular password instead of App Password (Gmail)
+- App Password expired or revoked
+- 2-Factor Authentication not enabled
+- Account security blocking access
+
+*Solutions*:
+1. Verify you're using an App Password (not regular password)
+2. Regenerate the App Password at https://myaccount.google.com/apppasswords
+3. Check Gmail account security settings for blocks
+4. Ensure password has no extra spaces or characters
+
+**Error: "Connection refused" or "Timeout"**
+
+*Causes*:
+- Incorrect SMTP host/port
+- Firewall blocking SMTP connection
+- SMTP server not accessible
+
+*Solutions*:
+1. Verify SMTP host and port are correct
+2. Test connection: `telnet smtp.gmail.com 587`
+3. Check firewall settings
+4. Try different SMTP server if needed
+
+**Email Not Being Sent**
+
+*Check*:
+1. Is `review.enabled: true` in your config?
+2. Is `review.send_email: true` in your config?
+3. Are SMTP credentials correct?
+4. Check logs for detailed error messages
+
+*Debug*:
+Run with verbose logging to see SMTP configuration being used:
+```bash
+python -c "
+from review.emailer import load_smtp_config
+from pathlib import Path
+cfg = load_smtp_config(Path('.'))
+print(f'Host: {cfg.host}')
+print(f'Port: {cfg.port}')
+print(f'User: {cfg.user}')
+print(f'TLS: {cfg.use_tls}')
+print(f'Recipients: {cfg.to_addrs}')
+"
+```
+
+##### Configuration Priority
+
+SMTP configuration is loaded in this order (highest priority first):
+
+1. **Environment variables** (`AIGUARD_SMTP_*`)
+2. **Config file** (`aiguard.yaml` or `aiguard.toml`)
+3. **Hard defaults** (`localhost:1025`)
+
+Environment variables always override file configuration.
+
+##### Project ID Configuration
+
+To ensure reviews appear under the correct project name, set `project_id` in your `aiguard.yaml`:
+
+```yaml
+pipeline:
+  project_id: "your-project-name"  # Set to your project name
+  review:
+    enabled: true
+```
+
+If `project_id` is empty, reviews will appear under "default".
+
 ---
 
 ### 6.8 Pipeline (`pipeline/`)

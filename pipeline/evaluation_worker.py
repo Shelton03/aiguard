@@ -332,7 +332,7 @@ class EvaluationWorker:
             return
 
         # Initialize review queue (per-project DB)
-        project_id = event.project_id or "default"
+        project_id = event.project_id or self._config.project_id or "default"
         db_path = Path(self._storage.root) / ".aiguard" / f"{project_id}.db"
 
         queue = ReviewQueue(db_path=db_path, project=project_id)
@@ -358,7 +358,7 @@ class EvaluationWorker:
         # Send email notification (if enabled)
         if self._config.review_send_email:
             try:
-                emailer = Emailer()
+                emailer = Emailer(root=self._storage.root)
                 emailer.send_review_alert(
                     project=project_id,
                     item_id=item.id,
@@ -368,7 +368,30 @@ class EvaluationWorker:
                     token=item.review_token,
                 )
             except Exception as exc:
-                logger.error("Failed to send review alert email: %s", exc)
+                logger.error(
+                    "Failed to send review alert email for trace %s (project=%s):\n"
+                    "  Error: %s\n"
+                    "  SMTP Config:\n"
+                    "    Host: %s\n"
+                    "    Port: %s\n"
+                    "    User: %s\n"
+                    "    TLS: %s\n"
+                    "    Recipients: %s\n"
+                    "  Paths:\n"
+                    "    Working Directory: %s\n"
+                    "    Storage Root: %s\n"
+                    "    Config File: %s\n"
+                    "  Tips:\n"
+                    "    - For Gmail, ensure you're using an App Password (not regular password)\n"
+                    "    - App passwords are 16 characters, generated at https://myaccount.google.com/apppasswords\n"
+                    "    - Verify SMTP settings in aiguard.yaml or environment variables",
+                    event.trace_id, project_id, exc,
+                    emailer.cfg.host, emailer.cfg.port, emailer.cfg.user, emailer.cfg.use_tls,
+                    emailer.cfg.to_addrs,
+                    Path.cwd(),
+                    self._storage.root,
+                    self._storage.root / "aiguard.yaml"
+                )
                 # Don't fail the evaluation if email fails
 
     # ---- Adversarial --------------------------------------------------
