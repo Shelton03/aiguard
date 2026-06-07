@@ -45,4 +45,7 @@ class EvolutionaryEngine:
             attack.generation_type = GenerationType.EVOLVED
         if retained:
             self.storage.insert_attacks(retained)
+            # Promote successful mutations to seeds for next evolutionary round
+            from .seed_manager import SeedManager
+            SeedManager(self.storage).promote_to_seed(retained)
         return retained

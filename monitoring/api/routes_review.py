@@ -14,7 +14,7 @@ def _make_queue():
     from storage.manager import StorageManager
 
     mgr = StorageManager()
-    db_path = Path(mgr.root) / ".aiguard" / "aiguard.db"
+    db_path = Path(mgr.root) / ".aiguard" / f"{mgr.project}.db"
     try:
         from review.queue import ReviewQueue
 

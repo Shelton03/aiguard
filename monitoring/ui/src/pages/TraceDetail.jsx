@@ -197,10 +197,13 @@ export default function TraceDetail() {
                   <div className="space-y-1">
                     {(() => {
                       const taxonomy = ev.metadata?.taxonomy || deriveTaxonomy(ev.category)
+                      const isSafe = ev.risk_level === 'safe'
+                      const showSubtype = taxonomy.subtype !== '—' && taxonomy.subtype !== 'unknown' && !isSafe
+                      
                       return (
                         <>
                           <TaxonomyRow label="Family" value={taxonomy.family} />
-                          <TaxonomyRow label="Subtype" value={taxonomy.subtype} />
+                          {showSubtype && <TaxonomyRow label="Subtype" value={taxonomy.subtype} />}
                           <TaxonomyRow label="Source" value={taxonomy.source} />
                         </>
                       )

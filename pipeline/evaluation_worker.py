@@ -355,44 +355,47 @@ class EvaluationWorker:
             trigger_reason,
         )
 
-        # Send email notification (if enabled)
+        # Send email notification (if enabled) - run in background thread to avoid blocking HTTP response
         if self._config.review_send_email:
-            try:
-                emailer = Emailer(root=self._storage.root)
-                emailer.send_review_alert(
-                    project=project_id,
-                    item_id=item.id,
-                    module_type=module_type,
-                    trigger_reason=trigger_reason,
-                    raw_score=raw_score,
-                    token=item.review_token,
-                )
-            except Exception as exc:
-                logger.error(
-                    "Failed to send review alert email for trace %s (project=%s):\n"
-                    "  Error: %s\n"
-                    "  SMTP Config:\n"
-                    "    Host: %s\n"
-                    "    Port: %s\n"
-                    "    User: %s\n"
-                    "    TLS: %s\n"
-                    "    Recipients: %s\n"
-                    "  Paths:\n"
-                    "    Working Directory: %s\n"
-                    "    Storage Root: %s\n"
-                    "    Config File: %s\n"
-                    "  Tips:\n"
-                    "    - For Gmail, ensure you're using an App Password (not regular password)\n"
-                    "    - App passwords are 16 characters, generated at https://myaccount.google.com/apppasswords\n"
-                    "    - Verify SMTP settings in aiguard.yaml or environment variables",
-                    event.trace_id, project_id, exc,
-                    emailer.cfg.host, emailer.cfg.port, emailer.cfg.user, emailer.cfg.use_tls,
-                    emailer.cfg.to_addrs,
-                    Path.cwd(),
-                    self._storage.root,
-                    self._storage.root / "aiguard.yaml"
-                )
-                # Don't fail the evaluation if email fails
+            def _send_email():
+                try:
+                    emailer = Emailer(root=self._storage.root)
+                    emailer.send_review_alert(
+                        project=project_id,
+                        item_id=item.id,
+                        module_type=module_type,
+                        trigger_reason=trigger_reason,
+                        raw_score=raw_score,
+                        token=item.review_token,
+                    )
+                except Exception as exc:
+                    logger.error(
+                        "Failed to send review alert email for trace %s (project=%s):\n"
+                        "  Error: %s\n"
+                        "  SMTP Config:\n"
+                        "    Host: %s\n"
+                        "    Port: %s\n"
+                        "    User: %s\n"
+                        "    TLS: %s\n"
+                        "    Recipients: %s\n"
+                        "  Paths:\n"
+                        "    Working Directory: %s\n"
+                        "    Storage Root: %s\n"
+                        "    Config File: %s\n"
+                        "  Tips:\n"
+                        "    - For Gmail, ensure you're using an App Password (not regular password)\n"
+                        "    - App passwords are 16 characters, generated at https://myaccount.google.com/apppasswords\n"
+                        "    - Verify SMTP settings in aiguard.yaml or environment variables",
+                        event.trace_id, project_id, exc,
+                        emailer.cfg.host, emailer.cfg.port, emailer.cfg.user, emailer.cfg.use_tls,
+                        emailer.cfg.to_addrs,
+                        Path.cwd(),
+                        self._storage.root,
+                        self._storage.root / "aiguard.yaml"
+                    )
+            
+            email_thread = threading.Thread(target=_send_email, daemon=True)
+            email_thread.start()
 
     # ---- Adversarial --------------------------------------------------
 
