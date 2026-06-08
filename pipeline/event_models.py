@@ -31,6 +31,8 @@ class ModuleEvaluationResult:
         Human-readable classification, e.g. ``"safe"``, ``"hallucinated"``.
     score:
         Numeric risk score in ``[0, 1]``.
+    risk_level:
+        Categorical risk level from judge, e.g. ``"none"``, ``"low"``, ``"medium"``, ``"high"``, ``"critical"``.
     confidence:
         Model/heuristic confidence in ``[0, 1]``.
     explanation:
@@ -40,6 +42,7 @@ class ModuleEvaluationResult:
     """
     label: str
     score: float
+    risk_level: str
     confidence: float
     explanation: str
     raw: Dict[str, Any] = field(default_factory=dict)
@@ -48,6 +51,7 @@ class ModuleEvaluationResult:
         return {
             "label": self.label,
             "score": round(self.score, 4),
+            "risk_level": self.risk_level,
             "confidence": round(self.confidence, 4),
             "explanation": self.explanation,
             "raw": self.raw,

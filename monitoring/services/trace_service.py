@@ -66,14 +66,30 @@ class TraceService:
         raw_traces: List[Dict[str, Any]] = export.get("traces", [])
         raw_evals: List[Dict[str, Any]] = export.get("evaluation_results", [])
 
-        # Build quick lookups: trace_id → {module: risk_level/category}
+        # Build quick lookups: trace_id → {module: label/risk_level/category/attack_type/etc}
         label_map: Dict[str, Dict[str, str]] = {}
+        risk_level_map: Dict[str, Dict[str, str]] = {}
         category_map: Dict[str, Dict[str, str]] = {}
+        detail_map: Dict[str, Dict[str, Dict[str, Any]]] = {}  # trace_id → {module → details}
+        
         for ev in raw_evals:
             tid = ev.get("trace_id", "")
             mod = ev.get("module", "")
-            label_map.setdefault(tid, {})[mod] = ev.get("risk_level", "")
+            label_map.setdefault(tid, {})[mod] = ev.get("label", ev.get("risk_level", ""))
+            risk_level_map.setdefault(tid, {})[mod] = ev.get("risk_level", "none")
             category_map.setdefault(tid, {})[mod] = ev.get("category", "")
+            
+            # Store detailed fields for both modules
+            detail_map.setdefault(tid, {})[mod] = {
+                "attack_type": ev.get("attack_type"),
+                "subtype": ev.get("subtype"),
+                "hallucination_type": ev.get("hallucination_type"),
+                "hallucination_subtype": ev.get("hallucination_subtype"),
+                "source": ev.get("source"),
+                "compliance_status": ev.get("compliance_status"),
+                "explanation": ev.get("explanation"),
+                "risk_reason": ev.get("risk_reason"),
+            }
 
         # Parse filter datetimes once
         dt_from = _parse_dt(date_from)
@@ -91,7 +107,10 @@ class TraceService:
             if dt_to and ts and ts > dt_to:
                 continue
             labels = label_map.get(t.get("id", ""), {})
+            risk_levels = risk_level_map.get(t.get("id", ""), {})
             categories = category_map.get(t.get("id", ""), {})
+            hall_details = detail_map.get(t.get("id", ""), {}).get("hallucination", {})
+            adv_details = detail_map.get(t.get("id", ""), {}).get("adversarial", {})
             hall_cat = categories.get("hallucination", "") or ""
             hall_family = hall_cat.split("/")[0] if "/" in hall_cat else ""
             hall_subtype = hall_cat.split("/")[-1] if "/" in hall_cat else ""
@@ -111,9 +130,23 @@ class TraceService:
                     **t,
                     "hallucination_label": labels.get("hallucination"),
                     "adversarial_label": labels.get("adversarial"),
+                    "hallucination_risk_level": risk_levels.get("hallucination") or "none",
+                    "adversarial_risk_level": risk_levels.get("adversarial") or "none",
                     "hallucination_category": hall_cat or None,
                     "hallucination_family": hall_family or None,
                     "hallucination_subtype": hall_subtype or None,
+                    # Hallucination details
+                    "hallucination_type": hall_details.get("hallucination_type"),
+                    "hallucination_subtype_detail": hall_details.get("hallucination_subtype"),
+                    "source": hall_details.get("source"),
+                    "hallucination_explanation": hall_details.get("explanation"),
+                    "hallucination_risk_reason": hall_details.get("risk_reason"),
+                    # Adversarial details
+                    "attack_type": adv_details.get("attack_type"),
+                    "subtype": adv_details.get("subtype"),
+                    "compliance_status": adv_details.get("compliance_status"),
+                    "adversarial_explanation": adv_details.get("explanation"),
+                    "adversarial_risk_reason": adv_details.get("risk_reason"),
                     "metadata": json.loads(t["metadata"])
                     if isinstance(t.get("metadata"), str)
                     else (t.get("metadata") or {}),

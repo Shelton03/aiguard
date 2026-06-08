@@ -40,22 +40,34 @@ SCHEMA = [
     );
     """,
     """
-    CREATE TABLE IF NOT EXISTS evaluation_results (
-        project TEXT NOT NULL,
-        id TEXT PRIMARY KEY,
-        trace_id TEXT,
-        test_case_id TEXT,
-        module TEXT,
-        mode TEXT,
-        execution_mode TEXT,
-        scores TEXT,
-        category TEXT,
-        risk_level TEXT,
-        confidence REAL,
-        metadata TEXT,
-        created_at TEXT
-    );
-    """,
+CREATE TABLE IF NOT EXISTS evaluation_results (
+    project TEXT NOT NULL,
+    id TEXT PRIMARY KEY,
+    trace_id TEXT,
+    test_case_id TEXT,
+    module TEXT,
+    mode TEXT,
+    execution_mode TEXT,
+    scores TEXT,
+    category TEXT,
+    label TEXT,
+    risk_level TEXT,
+    confidence REAL,
+    metadata TEXT,
+    created_at TEXT,
+    -- NEW COLUMNS - Adversarial-specific
+    attack_type TEXT,
+    subtype TEXT,
+    -- NEW COLUMNS - Hallucination-specific
+    hallucination_type TEXT,
+    hallucination_subtype TEXT,
+    source TEXT,
+    -- NEW COLUMNS - Both modules
+    compliance_status TEXT,
+    explanation TEXT,
+    risk_reason TEXT
+);
+""",
     """
     CREATE TABLE IF NOT EXISTS review_labels (
         project TEXT NOT NULL,
@@ -100,9 +112,26 @@ class SQLiteBackend(BaseBackend):
             self._ensure_eval_metadata_column(conn)
 
     def _ensure_eval_metadata_column(self, conn: sqlite3.Connection) -> None:
+        """Add new columns to existing tables if they don't exist."""
         cols = {row[1] for row in conn.execute("PRAGMA table_info(evaluation_results)").fetchall()}
-        if "metadata" not in cols:
-            conn.execute("ALTER TABLE evaluation_results ADD COLUMN metadata TEXT")
+        
+        new_columns = [
+            "label TEXT",
+            "attack_type TEXT",
+            "subtype TEXT",
+            "hallucination_type TEXT",
+            "hallucination_subtype TEXT",
+            "source TEXT",
+            "compliance_status TEXT",
+            "explanation TEXT",
+            "risk_reason TEXT",
+        ]
+        
+        for col_def in new_columns:
+            col_name = col_def.split()[0]
+            if col_name not in cols:
+                conn.execute(f"ALTER TABLE evaluation_results ADD COLUMN {col_def}")
+                logger.info("Added column to evaluation_results: %s", col_name)
 
     def save_test_case(self, project: str, case: TestCase) -> None:
         with self._connect() as conn:
@@ -151,8 +180,11 @@ class SQLiteBackend(BaseBackend):
             conn.execute(
                 """
                 INSERT OR REPLACE INTO evaluation_results (
-                    project, id, trace_id, test_case_id, module, mode, execution_mode, scores, category, risk_level, confidence, metadata, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    project, id, trace_id, test_case_id, module, mode, execution_mode, 
+                    scores, category, label, risk_level, confidence, metadata, created_at,
+                    attack_type, subtype, hallucination_type, hallucination_subtype, 
+                    source, compliance_status, explanation, risk_reason
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     project,
@@ -164,10 +196,19 @@ class SQLiteBackend(BaseBackend):
                     result.execution_mode,
                     json.dumps(result.scores),
                     result.category,
+                    result.label,
                     result.risk_level,
                     result.confidence,
                     json.dumps(result.metadata or {}),
                     result.created_at.isoformat(),
+                    result.attack_type,
+                    result.subtype,
+                    result.hallucination_type,
+                    result.hallucination_subtype,
+                    result.source,
+                    result.compliance_status,
+                    result.explanation,
+                    result.risk_reason,
                 ),
             )
 
@@ -223,6 +264,14 @@ class SQLiteBackend(BaseBackend):
                     confidence=row["confidence"],
                     metadata=json.loads(row.get("metadata") or "{}"),
                     created_at=datetime.fromisoformat(row["created_at"]),
+                    attack_type=row.get("attack_type"),
+                    subtype=row.get("subtype"),
+                    hallucination_type=row.get("hallucination_type"),
+                    hallucination_subtype=row.get("hallucination_subtype"),
+                    source=row.get("source"),
+                    compliance_status=row.get("compliance_status"),
+                    explanation=row.get("explanation"),
+                    risk_reason=row.get("risk_reason"),
                 )
                 for row in rows
             ]

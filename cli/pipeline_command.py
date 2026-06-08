@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import signal
 import time
-
+import logging
 import typer
 
 pipeline_app = typer.Typer(
@@ -24,6 +24,13 @@ def pipeline_start(
     project: str = typer.Option("", "--project", help="Project ID (overrides aiguard.yaml)"),
 ) -> None:
     """Initialise the evaluation pipeline and keep it running."""
+
+    logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%H:%M:%S",
+)
+    
     if ctx.invoked_subcommand is not None:
         return
 

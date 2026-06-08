@@ -42,9 +42,25 @@ class EvaluationResultRecord:
     execution_mode: str
     scores: Dict[str, Any]
     category: str
+    label: str
     risk_level: str
     confidence: float
     created_at: datetime
+    
+    # NEW FIELDS - Adversarial-specific
+    attack_type: Optional[str] = None
+    subtype: Optional[str] = None
+    
+    # NEW FIELDS - Hallucination-specific
+    hallucination_type: Optional[str] = None
+    hallucination_subtype: Optional[str] = None
+    source: Optional[str] = None
+    
+    # NEW FIELDS - Both modules
+    compliance_status: Optional[str] = None
+    explanation: Optional[str] = None
+    risk_reason: Optional[str] = None
+    
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 

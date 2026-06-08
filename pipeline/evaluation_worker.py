@@ -54,6 +54,10 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+# Global warm-up state - prevents duplicate warm-ups across all worker instances
+_warmup_in_progress = threading.Event()
+_warmup_complete = threading.Event()
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -279,25 +283,38 @@ class EvaluationWorker:
 
     def _start_background_warmup(self) -> None:
         """Start judge warm-up in background thread. Non-blocking."""
+        # Check if warm-up already complete
+        if _warmup_complete.is_set():
+            logger.info("WARMUP: Already complete, skipping")
+            return
+        
+        # Check if warm-up already in progress
+        if _warmup_in_progress.is_set():
+            logger.info("WARMUP: Already in progress, skipping duplicate")
+            return
+        
+        # Mark warm-up as in progress
+        _warmup_in_progress.set()
+        
         def _warm_up():
             try:
                 logger.info("EvaluationWorker: starting background judge warm-up")
                 
                 if self._config.enable_hallucination_eval and self._config.enable_adversarial_eval and UnifiedJudge is not None:
-                    # Use unified judge for dual-mode
                     self._unified_judge = UnifiedJudge(self._config.judge)
                     if not self._unified_judge.warm_up():
                         logger.warning("EvaluationWorker: unified judge warm-up returned no response")
                 else:
-                    # Use legacy judges for single-mode
                     self._warm_up_judges_legacy()
                 
                 self._judges_warmed = True
+                _warmup_complete.set()  # Mark globally complete
                 logger.info("EvaluationWorker: background warm-up complete")
                 
             except Exception as e:
                 logger.warning("EvaluationWorker: background warm-up failed: %s", e)
-                self._judges_warmed = True  # Mark as done to avoid retry
+                _warmup_complete.set()  # Still mark as done to avoid retry
+                self._judges_warmed = True
         
         thread = threading.Thread(target=_warm_up, daemon=True, name="aiguard-warmup")
         thread.start()
@@ -847,15 +864,26 @@ class EvaluationWorker:
         if bundle.hallucination is not None:
             r = bundle.hallucination
             raw = r.raw or {}
+            
             try:
                 self._storage.delete_evaluations(event.trace_id, "hallucination")
             except Exception:
                 logger.exception("PERSIST: Failed to clear old hallucination eval for %s", event.trace_id)
             
+            # Extract hallucination-specific fields from judge response
+            hallucination_data = raw.get("hallucination", {})
+            hall_classification = hallucination_data.get("classification", {}).get("hallucination", {})
+            
+            hallucination_type = hall_classification.get("type", "unknown")
+            hallucination_subtype = hallucination_type.split("/")[-1] if "/" in hallucination_type else "unknown"
+            source = hall_classification.get("source", "unknown")
+            compliance_status = hallucination_data.get("compliance_status", hallucination_data.get("compliance", {}).get("status", "unknown"))
+            risk_reason = hallucination_data.get("risk_reason", hallucination_data.get("risk", {}).get("reason", ""))
+            
             scores_dict = raw.get("scores", {"overall_risk": r.score})
-            logger.info("PERSIST: Saving hallucination evaluation | trace=%s | label=%s, score=%.3f, confidence=%.3f, category=%s, mode=%s, scores=%s",
-                       event.trace_id, r.label, r.score, r.confidence,
-                       raw.get("category", "unknown"), raw.get("mode", "unknown"), scores_dict)
+            
+            logger.info("PERSIST: Saving hallucination evaluation | trace=%s | label=%s, score=%.3f, risk_level=%s, confidence=%.3f, type=%s, source=%s",
+                       event.trace_id, r.label, r.score, r.risk_level, r.confidence, hallucination_type, source)
             
             rec = EvaluationResultRecord(
                 id=str(uuid.uuid4()),
@@ -866,11 +894,20 @@ class EvaluationWorker:
                 execution_mode=raw.get("execution_mode", "monitoring"),
                 scores=scores_dict,
                 category=raw.get("category", "unknown"),
-                risk_level=r.label,
+                label=r.label,
+                risk_level=r.risk_level,
                 confidence=r.confidence,
-                metadata=raw.get("metadata", {}),
+                metadata=raw,
                 created_at=now,
+                # NEW FIELDS
+                hallucination_type=hallucination_type,
+                hallucination_subtype=hallucination_subtype,
+                source=source,
+                compliance_status=compliance_status,
+                explanation=r.explanation,
+                risk_reason=risk_reason,
             )
+            
             try:
                 self._storage.save_evaluation(rec)
                 eval_count += 1
@@ -880,15 +917,23 @@ class EvaluationWorker:
 
         if bundle.adversarial is not None:
             r = bundle.adversarial
+            raw = r.raw or {}
+            
             try:
                 self._storage.delete_evaluations(event.trace_id, "adversarial")
             except Exception:
                 logger.exception("PERSIST: Failed to clear old adversarial eval for %s", event.trace_id)
             
+            # Extract adversarial-specific fields from judge response
+            attack_type = raw.get("attack_type", "unknown")
+            subtype = raw.get("subtype", "unknown")
+            compliance_status = raw.get("compliance_status", raw.get("compliance", {}).get("status", "unknown"))
+            risk_reason = raw.get("risk_reason", raw.get("risk", {}).get("reason", ""))
+            
             scores_dict = {"score": r.score}
-            logger.info("PERSIST: Saving adversarial evaluation | trace=%s | label=%s, score=%.3f, confidence=%.3f, category=%s, mode=%s, scores=%s",
-                       event.trace_id, r.label, r.score, r.confidence,
-                       "prompt_injection", "injection_check", scores_dict)
+            
+            logger.info("PERSIST: Saving adversarial evaluation | trace=%s | label=%s, score=%.3f, risk_level=%s, confidence=%.3f, attack_type=%s, subtype=%s",
+                       event.trace_id, r.label, r.score, r.risk_level, r.confidence, attack_type, subtype)
             
             rec = EvaluationResultRecord(
                 id=str(uuid.uuid4()),
@@ -898,12 +943,20 @@ class EvaluationWorker:
                 mode="injection_check",
                 execution_mode="monitoring",
                 scores=scores_dict,
-                category="prompt_injection",
-                risk_level=r.label,
+                category=attack_type,  # Use attack_type as category
+                label=r.label,
+                risk_level=r.risk_level,
                 confidence=r.confidence,
-                metadata=r.raw or {},
+                metadata=raw,
                 created_at=now,
+                # NEW FIELDS
+                attack_type=attack_type,
+                subtype=subtype,
+                compliance_status=compliance_status,
+                explanation=r.explanation,
+                risk_reason=risk_reason,
             )
+            
             try:
                 self._storage.save_evaluation(rec)
                 eval_count += 1

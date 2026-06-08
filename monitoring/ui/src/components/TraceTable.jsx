@@ -18,11 +18,30 @@ function LabelBadge({ label }) {
 }
 
 function CategoryBadge({ value }) {
-  if (!value) return <span className="text-gray-300 text-xs">—</span>
+  if (!value) return null
   const trimmed = String(value).replace(/^factuality\//, '').replace(/^faithfulness\//, '')
   return (
-    <span className="inline-flex items-center rounded-full bg-slate-100 text-slate-600 px-2 py-0.5 text-[10px]">
+    <span className="inline-block text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 mt-0.5">
       {trimmed}
+    </span>
+  )
+}
+
+function RiskLevelBadge({ level }) {
+  if (!level) return <span className="text-gray-300 text-xs">—</span>
+  
+  const colorMap = {
+    none: 'bg-gray-100 text-gray-500',
+    low: 'bg-blue-100 text-blue-700',
+    medium: 'bg-yellow-100 text-yellow-700',
+    high: 'bg-orange-100 text-orange-700',
+    critical: 'bg-red-100 text-red-700',
+  }
+  
+  const cls = colorMap[level] || 'bg-gray-100 text-gray-600'
+  return (
+    <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full ${cls}`}>
+      {level}
     </span>
   )
 }
@@ -65,13 +84,25 @@ export default function TraceTable({ traces = [] }) {
             <th className="text-left px-4 py-3 font-semibold">
               <div className="flex flex-col">
                 <span>Hallucination</span>
-                <span className="text-[10px] text-gray-400 font-normal">Label + subtype</span>
+                <span className="text-[10px] text-gray-400 font-normal">Label + type</span>
+              </div>
+            </th>
+            <th className="text-left px-4 py-3 font-semibold">
+              <div className="flex flex-col">
+                <span>Hallucination Risk</span>
+                <span className="text-[10px] text-gray-400 font-normal">Risk level</span>
               </div>
             </th>
             <th className="text-left px-4 py-3 font-semibold">
               <div className="flex flex-col">
                 <span>Adversarial</span>
-                <span className="text-[10px] text-gray-400 font-normal">Injection risk</span>
+                <span className="text-[10px] text-gray-400 font-normal">Attack type</span>
+              </div>
+            </th>
+            <th className="text-left px-4 py-3 font-semibold">
+              <div className="flex flex-col">
+                <span>Adversarial Risk</span>
+                <span className="text-[10px] text-gray-400 font-normal">Risk level</span>
               </div>
             </th>
           </tr>
@@ -94,14 +125,48 @@ export default function TraceTable({ traces = [] }) {
               <td className="px-4 py-3 text-right tabular-nums">
                 {t.tokens_used != null ? t.tokens_used : '—'}
               </td>
+              
+              {/* Hallucination column - enhanced */}
               <td className="px-4 py-3">
                 <div className="flex flex-col gap-1">
                   <LabelBadge label={t.hallucination_label} />
-                  <CategoryBadge value={t.hallucination_category} />
+                  {t.hallucination_label !== 'safe' && (
+                    <>
+                      {t.hallucination_type && <CategoryBadge value={t.hallucination_type} />}
+                      {t.hallucination_subtype && t.hallucination_subtype !== 'unknown' && (
+                        <CategoryBadge value={t.hallucination_subtype} />
+                      )}
+                      {t.source && t.source !== 'unknown' && (
+                        <CategoryBadge value={t.source} />
+                      )}
+                    </>
+                  )}
                 </div>
               </td>
+              
+              {/* Hallucination Risk Level - always show */}
               <td className="px-4 py-3">
-                <LabelBadge label={t.adversarial_label} />
+                <RiskLevelBadge level={t.hallucination_risk_level} />
+              </td>
+              
+              {/* Adversarial column - enhanced */}
+              <td className="px-4 py-3">
+                <div className="flex flex-col gap-1">
+                  <LabelBadge label={t.adversarial_label} />
+                  {t.adversarial_label !== 'safe' && (
+                    <>
+                      {t.attack_type && <CategoryBadge value={t.attack_type} />}
+                      {t.subtype && t.subtype !== 'unknown' && (
+                        <CategoryBadge value={t.subtype} />
+                      )}
+                    </>
+                  )}
+                </div>
+              </td>
+              
+              {/* Adversarial Risk Level - always show */}
+              <td className="px-4 py-3">
+                <RiskLevelBadge level={t.adversarial_risk_level} />
               </td>
             </tr>
           ))}

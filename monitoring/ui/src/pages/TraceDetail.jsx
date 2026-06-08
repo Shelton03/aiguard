@@ -152,84 +152,133 @@ export default function TraceDetail() {
         </div>
       )}
 
-      {/* Evaluations */}
-      {trace.evaluations && trace.evaluations.length > 0 && (
-        <div className="space-y-4">
-          <div>
-            <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wide">
-              Evaluation Results
-            </h2>
-            <p className="text-xs text-gray-500 mt-1">
-              Labels summarize risk signals per module. Scores are normalized to 0–1.
-            </p>
-          </div>
-          {trace.evaluations.map((ev) => (
-            <div
-              key={ev.id}
-              className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 space-y-3"
-            >
-              <div className="flex items-center gap-3">
-                <span className="text-sm font-bold capitalize text-gray-800">{ev.module}</span>
-                <Badge label={ev.risk_level} />
-                <span className="text-xs text-gray-400">{ev.mode} / {ev.execution_mode}</span>
-              </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                {ev.scores &&
-                  Object.entries(ev.scores).map(([k, v]) => (
-                    <div key={k} className="text-xs">
-                      <span className="text-gray-500">{k}: </span>
-                      <span className="font-semibold text-gray-800">
-                        {v != null ? Number(v).toFixed(3) : '—'}
-                      </span>
-                    </div>
-                  ))}
-              </div>
-              {ev.confidence != null && (
-                <p className="text-xs text-gray-500">
-                  Confidence: <span className="font-semibold">{Number(ev.confidence).toFixed(3)}</span>
-                </p>
-              )}
-              {((ev.metadata && ev.metadata.taxonomy) || ev.category) && (
-                <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
-                  <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">
-                    Taxonomy
-                  </div>
-                  <div className="space-y-1">
-                    {(() => {
-                      const taxonomy = ev.metadata?.taxonomy || deriveTaxonomy(ev.category)
-                      const isSafe = ev.risk_level === 'safe'
-                      const showSubtype = taxonomy.subtype !== '—' && taxonomy.subtype !== 'unknown' && !isSafe
-                      
-                      return (
-                        <>
-                          <TaxonomyRow label="Family" value={taxonomy.family} />
-                          {showSubtype && <TaxonomyRow label="Subtype" value={taxonomy.subtype} />}
-                          <TaxonomyRow label="Source" value={taxonomy.source} />
-                        </>
-                      )
-                    })()}
-                    {ev.metadata?.taxonomy?.judge_label && (
-                      <TaxonomyRow label="Judge Label" value={ev.metadata.taxonomy.judge_label} />
-                    )}
-                    {ev.metadata?.taxonomy?.judge_confidence != null && (
-                      <TaxonomyRow
-                        label="Judge Confidence"
-                        value={Number(ev.metadata.taxonomy.judge_confidence).toFixed(2)}
-                      />
-                    )}
-                    {ev.metadata?.taxonomy?.judge_rationale && (
-                      <div className="rounded-md bg-white/60 px-2 py-1 text-[11px] text-slate-600">
-                        <span className="font-semibold text-slate-500">Judge rationale:</span>{' '}
-                        {ev.metadata.taxonomy.judge_rationale}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
+        {/* Evaluations */}
+        {trace.evaluations && trace.evaluations.length > 0 && (
+          <div className="space-y-4">
+            <div>
+              <h2 className="text-sm font-bold text-gray-700 uppercase tracking-wide">
+                Evaluation Results
+              </h2>
+              <p className="text-xs text-gray-500 mt-1">
+                Labels summarize risk signals per module. Scores are normalized to 0–1.
+              </p>
             </div>
-          ))}
-        </div>
-      )}
+            {trace.evaluations.map((ev) => (
+              <div
+                key={ev.id}
+                className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 space-y-3"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-bold capitalize text-gray-800">{ev.module}</span>
+                  <Badge label={ev.risk_level} />
+                  <span className="text-xs text-gray-400">{ev.mode} / {ev.execution_mode}</span>
+                </div>
+                
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {ev.scores &&
+                    Object.entries(ev.scores).map(([k, v]) => (
+                      <div key={k} className="text-xs">
+                        <span className="text-gray-500">{k}: </span>
+                        <span className="font-semibold text-gray-800">
+                          {v != null ? Number(v).toFixed(3) : '—'}
+                        </span>
+                      </div>
+                    ))}
+                </div>
+                
+                {ev.confidence != null && (
+                  <p className="text-xs text-gray-500">
+                    Confidence: <span className="font-semibold">{Number(ev.confidence).toFixed(3)}</span>
+                  </p>
+                )}
+                
+                {/* Hallucination-specific details - only when detected */}
+                {ev.module === 'hallucination' && ev.label && ev.label !== 'safe' && (
+                  <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
+                    <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">
+                      Hallucination Details
+                    </div>
+                    <div className="space-y-1">
+                      {ev.hallucination_type && (
+                        <div className="text-xs text-slate-700">
+                          <span className="font-semibold text-slate-500">Type:</span>{' '}
+                          <span className="font-medium">{ev.hallucination_type}</span>
+                        </div>
+                      )}
+                      {ev.hallucination_subtype && ev.hallucination_subtype !== 'unknown' && (
+                        <div className="text-xs text-slate-700">
+                          <span className="font-semibold text-slate-500">Subtype:</span>{' '}
+                          <span className="font-medium">{ev.hallucination_subtype}</span>
+                        </div>
+                      )}
+                      {ev.source && ev.source !== 'unknown' && (
+                        <div className="text-xs text-slate-700">
+                          <span className="font-semibold text-slate-500">Source:</span>{' '}
+                          <span className="font-medium capitalize">{ev.source}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+                
+                {/* Adversarial-specific details - only when detected */}
+                {ev.module === 'adversarial' && ev.label && ev.label !== 'safe' && (
+                  <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
+                    <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">
+                      Attack Details
+                    </div>
+                    <div className="space-y-1">
+                      {ev.attack_type && (
+                        <div className="text-xs text-slate-700">
+                          <span className="font-semibold text-slate-500">Attack Type:</span>{' '}
+                          <span className="font-medium">{ev.attack_type}</span>
+                        </div>
+                      )}
+                      {ev.subtype && ev.subtype !== 'unknown' && (
+                        <div className="text-xs text-slate-700">
+                          <span className="font-semibold text-slate-500">Subtype:</span>{' '}
+                          <span className="font-medium">{ev.subtype}</span>
+                        </div>
+                      )}
+                      {ev.compliance_status && ev.compliance_status !== 'complied' && (
+                        <div className="text-xs text-slate-700">
+                          <span className="font-semibold text-slate-500">Compliance:</span>{' '}
+                          <span className="font-medium capitalize">{ev.compliance_status}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+                
+                {/* Risk reason - only if not "none" */}
+                {ev.risk_reason && ev.risk_reason.toLowerCase() !== 'none' && (
+                  <div className="rounded-md bg-white/60 px-2 py-1 text-[11px] text-slate-600">
+                    <span className="font-semibold text-slate-500">Risk reason:</span>{' '}
+                    {ev.risk_reason}
+                  </div>
+                )}
+                
+                {/* Explanation - only if not safe */}
+                {ev.explanation && ev.label && ev.label !== 'safe' && (
+                  <div className="rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-700">
+                    <span className="font-semibold text-slate-500 block mb-1">Explanation:</span>
+                    {ev.explanation}
+                  </div>
+                )}
+                
+                {/* Full Judge Response - expandable */}
+                <details className="mt-3">
+                  <summary className="text-xs text-brand-600 cursor-pointer hover:underline">
+                    View full judge response
+                  </summary>
+                  <pre className="mt-2 text-[10px] text-gray-600 whitespace-pre-wrap font-mono bg-gray-50 p-3 rounded max-h-64 overflow-y-auto">
+                    {JSON.stringify(ev.metadata, null, 2)}
+                  </pre>
+                </details>
+              </div>
+            ))}
+          </div>
+        )}
     </div>
   )
 }
