@@ -36,6 +36,12 @@ except ImportError:
     AdversarialJudge = None
 
 try:
+    from pipeline.unified_judge import UnifiedJudge, DualEvaluationResult
+except ImportError:
+    UnifiedJudge = None
+    DualEvaluationResult = None
+
+try:
     from adversarial.data.build_default_dataset import (
         ATTACK_PHRASES,
         ATTACK_OBFUSCATION_PATTERNS,
@@ -113,10 +119,20 @@ class EvaluationWorker:
         # the optional extras are absent.
         self._hallucination_test = None  # initialised on first use
         self._adversarial_judge = None  # lazy-initialized
+        
+        # Unified judge for dual-mode evaluation
+        self._unified_judge = None
+        
+        # Background warm-up state
+        self._judges_warmed = False
 
-        # Initialize adversarial judge if enabled
+        # Initialize adversarial judge if enabled (single-mode only)
         if config.enable_adversarial_eval and config.judge.enabled and AdversarialJudge is not None:
             self._adversarial_judge = AdversarialJudge(config.judge)
+        
+        # Start background warm-up if judge enabled
+        if config.judge.enabled:
+            self._start_background_warmup()
 
     # ------------------------------------------------------------------
     # Public interface
@@ -160,14 +176,63 @@ class EvaluationWorker:
     # Internal
     # ------------------------------------------------------------------
 
+    def _run_unified_evaluation(
+        self,
+        event: TraceCreatedEvent,
+        *,
+        force_judge: bool = False,
+    ) -> DualEvaluationResult:
+        """Run unified judge evaluation. Falls back to heuristics if judge fails."""
+        prompt = _prompt_from_messages(event.input_messages)
+        
+        # Try unified judge if enabled
+        if self._config.judge.enabled or force_judge:
+            if self._unified_judge is None and UnifiedJudge is not None:
+                self._unified_judge = UnifiedJudge(self._config.judge)
+            
+            if self._unified_judge is not None:
+                try:
+                    unified_result = self._unified_judge.evaluate(
+                        prompt=prompt,
+                        response=event.output_text,
+                        context=event.context_documents,
+                        ground_truth=event.ground_truth,
+                    )
+                    
+                    if unified_result:
+                        logger.info(
+                            "EvaluationWorker: unified judge complete - "
+                            "adversarial=%s, hallucination=%s",
+                            unified_result.adversarial.label,
+                            unified_result.hallucination.label,
+                        )
+                        return unified_result
+                except Exception as e:
+                    logger.warning("EvaluationWorker: unified judge failed: %s", e)
+        
+        # Fallback: use heuristics for both sections
+        logger.info("EvaluationWorker: falling back to heuristics for both evaluations")
+        return DualEvaluationResult(
+            adversarial=self._run_adversarial(event),
+            hallucination=self._run_hallucination(event, force_judge=False),
+        )
+    
     def _evaluate_trace(self, event: TraceCreatedEvent, *, force_judge: bool = False) -> TraceEvaluatedEvent:
         bundle = EvaluationBundle()
-
-        if self._config.enable_hallucination_eval:
-            bundle.hallucination = self._run_hallucination(event, force_judge=force_judge)
-
-        if self._config.enable_adversarial_eval:
-            bundle.adversarial = self._run_adversarial(event)
+        
+        # Unified mode: both eval types enabled → use single judge request
+        if self._config.enable_hallucination_eval and self._config.enable_adversarial_eval and DualEvaluationResult is not None:
+            result = self._run_unified_evaluation(event, force_judge=force_judge)
+            bundle.adversarial = result.adversarial
+            bundle.hallucination = result.hallucination
+        
+        # Legacy mode: single eval type → use existing methods
+        else:
+            if self._config.enable_hallucination_eval:
+                bundle.hallucination = self._run_hallucination(event, force_judge=force_judge)
+            
+            if self._config.enable_adversarial_eval:
+                bundle.adversarial = self._run_adversarial(event)
 
         self._persist(event, bundle)
         return TraceEvaluatedEvent(
@@ -176,10 +241,35 @@ class EvaluationWorker:
             evaluation=bundle,
         )
 
-    def _warm_up_judges(self, *, force_judge: bool = False) -> None:
+    def _start_background_warmup(self) -> None:
+        """Start judge warm-up in background thread. Non-blocking."""
+        def _warm_up():
+            try:
+                logger.info("EvaluationWorker: starting background judge warm-up")
+                
+                if self._config.enable_hallucination_eval and self._config.enable_adversarial_eval and UnifiedJudge is not None:
+                    # Use unified judge for dual-mode
+                    self._unified_judge = UnifiedJudge(self._config.judge)
+                    if not self._unified_judge.warm_up():
+                        logger.warning("EvaluationWorker: unified judge warm-up returned no response")
+                else:
+                    # Use legacy judges for single-mode
+                    self._warm_up_judges_legacy()
+                
+                self._judges_warmed = True
+                logger.info("EvaluationWorker: background warm-up complete")
+                
+            except Exception as e:
+                logger.warning("EvaluationWorker: background warm-up failed: %s", e)
+                self._judges_warmed = True  # Mark as done to avoid retry
+        
+        thread = threading.Thread(target=_warm_up, daemon=True, name="aiguard-warmup")
+        thread.start()
+        logger.info("EvaluationWorker: background warm-up thread started")
+    
+    def _warm_up_judges_legacy(self) -> None:
+        """Legacy warm-up for single-mode evaluation."""
         judge_cfg: JudgeConfig = self._config.judge
-        if not judge_cfg.enabled and not force_judge:
-            return
         if self._config.enable_adversarial_eval and self._adversarial_judge is not None:
             try:
                 logger.info("EvaluationWorker: warming up adversarial judge")
@@ -190,7 +280,7 @@ class EvaluationWorker:
         if self._config.enable_hallucination_eval:
             from hallucination.hallucination_test import HallucinationTest
 
-            if self._hallucination_test is None or force_judge:
+            if self._hallucination_test is None:
                 self._hallucination_test = HallucinationTest(
                     enable_judge=True,
                     judge_config=judge_cfg,
@@ -202,6 +292,16 @@ class EvaluationWorker:
                         logger.warning("EvaluationWorker: hallucination judge warm-up returned no response")
                 except Exception:
                     logger.warning("EvaluationWorker: hallucination judge warm-up failed")
+    
+    def _warm_up_judges(self, *, force_judge: bool = False) -> None:
+        """Warm-up judges if not already warmed (unless force_judge=True)."""
+        if self._judges_warmed and not force_judge:
+            logger.debug("EvaluationWorker: judges already warmed, skipping")
+            return
+        
+        # If warm-up still in progress, don't block - let evaluation proceed
+        if not self._judges_warmed:
+            logger.info("EvaluationWorker: warm-up still in progress, evaluation will proceed")
 
     # ---- Hallucination -----------------------------------------------
 
