@@ -183,19 +183,29 @@ class EvaluationWorker:
         force_judge: bool = False,
     ) -> DualEvaluationResult:
         """Run unified judge evaluation. Falls back to heuristics if judge fails."""
+        logger.info("UNIFIED_JUDGE_WORKFLOW: Starting unified evaluation for trace %s (force_judge=%s)",
+                    event.trace_id, force_judge)
+        
         prompt = _prompt_from_messages(event.input_messages)
         
         # Extract context and ground_truth from metadata if available
         context = event.metadata.get("context_documents") if event.metadata else None
         ground_truth = event.metadata.get("ground_truth") if event.metadata else None
         
+        logger.info("UNIFIED_JUDGE_WORKFLOW: Input details | trace=%s | prompt_chars=%d, response_chars=%d, has_context=%s, has_ground_truth=%s",
+                    event.trace_id, len(prompt), len(event.output_text or ""), 
+                    context is not None, ground_truth is not None)
+        logger.info("UNIFIED_JUDGE_WORKFLOW: Metadata keys=%s", list(event.metadata.keys()) if event.metadata else "None")
+        
         # Try unified judge if enabled
         if self._config.judge.enabled or force_judge:
             if self._unified_judge is None and UnifiedJudge is not None:
                 self._unified_judge = UnifiedJudge(self._config.judge)
+                logger.info("UNIFIED_JUDGE_WORKFLOW: UnifiedJudge instance created")
             
             if self._unified_judge is not None:
                 try:
+                    logger.info("UNIFIED_JUDGE_WORKFLOW: Calling unified_judge.evaluate() for trace %s", event.trace_id)
                     unified_result = self._unified_judge.evaluate(
                         prompt=prompt,
                         response=event.output_text,
@@ -204,40 +214,62 @@ class EvaluationWorker:
                     )
                     
                     if unified_result:
-                        logger.info(
-                            "EvaluationWorker: unified judge complete - "
-                            "adversarial=%s, hallucination=%s",
-                            unified_result.adversarial.label,
-                            unified_result.hallucination.label,
-                        )
+                        logger.info("UNIFIED_JUDGE_WORKFLOW: SUCCESS | trace=%s | adversarial=%s (score=%.3f, conf=%.3f), hallucination=%s (score=%.3f, conf=%.3f)",
+                                   event.trace_id,
+                                   unified_result.adversarial.label, unified_result.adversarial.score, unified_result.adversarial.confidence,
+                                   unified_result.hallucination.label, unified_result.hallucination.score, unified_result.hallucination.confidence)
                         return unified_result
+                    else:
+                        logger.info("UNIFIED_JUDGE_WORKFLOW: Judge returned None for trace %s", event.trace_id)
                 except Exception as e:
-                    logger.warning("EvaluationWorker: unified judge failed: %s", e)
+                    logger.info("UNIFIED_JUDGE_WORKFLOW: EXCEPTION | trace=%s | error_type=%s | message=%s | traceback follows:",
+                               event.trace_id, type(e).__name__, str(e))
+                    import traceback
+                    logger.info(traceback.format_exc())
         
         # Fallback: use heuristics for both sections
-        logger.info("EvaluationWorker: falling back to heuristics for both evaluations")
+        logger.info("UNIFIED_JUDGE_WORKFLOW: FALLBACK | trace=%s | Unified judge failed/returned None, calling individual judges/heuristics", event.trace_id)
+        logger.info("UNIFIED_JUDGE_WORKFLOW: Fallback will call _run_adversarial() and _run_hallucination()")
         return DualEvaluationResult(
             adversarial=self._run_adversarial(event),
             hallucination=self._run_hallucination(event, force_judge=False),
         )
     
     def _evaluate_trace(self, event: TraceCreatedEvent, *, force_judge: bool = False) -> TraceEvaluatedEvent:
+        logger.info("EVAL_WORKFLOW: Starting evaluation for trace %s", event.trace_id)
+        logger.info("EVAL_WORKFLOW: Config state | enable_hallucination=%s, enable_adversarial=%s, judge_enabled=%s, DualEvaluationResult_available=%s",
+                    self._config.enable_hallucination_eval,
+                    self._config.enable_adversarial_eval,
+                    self._config.judge.enabled,
+                    DualEvaluationResult is not None)
+        
         bundle = EvaluationBundle()
         
         # Unified mode: both eval types enabled → use single judge request
         if self._config.enable_hallucination_eval and self._config.enable_adversarial_eval and DualEvaluationResult is not None:
+            logger.info("EVAL_WORKFLOW: Mode=UNIFIED | trace=%s | Will call _run_unified_evaluation()", event.trace_id)
             result = self._run_unified_evaluation(event, force_judge=force_judge)
             bundle.adversarial = result.adversarial
             bundle.hallucination = result.hallucination
-        
-        # Legacy mode: single eval type → use existing methods
         else:
+            logger.info("EVAL_WORKFLOW: Mode=LEGACY | trace=%s | Will call individual evaluation methods", event.trace_id)
             if self._config.enable_hallucination_eval:
+                logger.info("EVAL_WORKFLOW: LEGACY | Calling _run_hallucination() for trace %s", event.trace_id)
                 bundle.hallucination = self._run_hallucination(event, force_judge=force_judge)
             
             if self._config.enable_adversarial_eval:
+                logger.info("EVAL_WORKFLOW: LEGACY | Calling _run_adversarial() for trace %s", event.trace_id)
                 bundle.adversarial = self._run_adversarial(event)
-
+        
+        logger.info("EVAL_WORKFLOW: Complete | trace=%s | hallucination=%s (score=%.3f, conf=%.3f), adversarial=%s (score=%.3f, conf=%.3f)",
+                    event.trace_id,
+                    bundle.hallucination.label if bundle.hallucination else "None",
+                    bundle.hallucination.score if bundle.hallucination else 0.0,
+                    bundle.hallucination.confidence if bundle.hallucination else 0.0,
+                    bundle.adversarial.label if bundle.adversarial else "None",
+                    bundle.adversarial.score if bundle.adversarial else 0.0,
+                    bundle.adversarial.confidence if bundle.adversarial else 0.0)
+        
         self._persist(event, bundle)
         return TraceEvaluatedEvent(
             trace_id=event.trace_id,
@@ -716,12 +748,19 @@ class EvaluationWorker:
 
         # Enrich with LLM judge if available
         if self._adversarial_judge is not None:
+            logger.info("ADVERSARIAL: Calling adversarial judge for trace %s (enrichment mode)", event.trace_id)
             try:
                 judge_decision = self._adversarial_judge.evaluate(
                     prompt=prompt,
                     response=event.output_text,
                 )
                 if judge_decision is not None:
+                    logger.info("ADVERSARIAL: Judge decision | detected=%s, attack_type=%s, subtype=%s, severity=%s, confidence=%.3f",
+                               judge_decision.detected,
+                               judge_decision.attack_type.value if judge_decision.attack_type else "None",
+                               judge_decision.subtype,
+                               judge_decision.severity.value if judge_decision.severity else "None",
+                               judge_decision.confidence)
                     # Override with judge results (enrichment)
                     label = judge_decision.label
                     # Blend scores: use heuristic as base, weight judge
@@ -750,12 +789,11 @@ class EvaluationWorker:
                             "risk": judge_decision.risk,
                         },
                     }
-            except Exception:
+                else:
+                    logger.info("ADVERSARIAL: Judge returned None, using heuristic-only result")
+            except Exception as e:
                 # Judge failed, fallback to heuristic-only
-                logger.warning(
-                    "EvaluationWorker: adversarial judge failed for trace %s, falling back to heuristic",
-                    event.trace_id,
-                )
+                logger.info("ADVERSARIAL: Judge evaluation failed | error=%s, using heuristic-only result", str(e))
 
         return ModuleEvaluationResult(
             label=label,
@@ -768,6 +806,8 @@ class EvaluationWorker:
     # ---- Persistence -------------------------------------------------
 
     def _persist(self, event: TraceCreatedEvent, bundle: EvaluationBundle) -> None:
+        logger.info("PERSIST: Starting persistence for trace %s", event.trace_id)
+        
         # ----- Trace record -----
         prompt = _prompt_from_messages(event.input_messages)
         tokens_used: int | None = None
@@ -795,21 +835,28 @@ class EvaluationWorker:
         )
         try:
             self._storage.save_trace(trace)
+            logger.info("PERSIST: Trace saved successfully | trace_id=%s, project_id=%s, model=%s",
+                       event.trace_id, event.project_id, event.model)
         except Exception:
-            logger.exception("EvaluationWorker: failed to persist trace %s", event.trace_id)
+            logger.exception("PERSIST: Failed to save trace %s", event.trace_id)
 
         # ----- EvaluationResultRecord for each module -----
         now = datetime.now(tz=timezone.utc)
+        eval_count = 0
+        
         if bundle.hallucination is not None:
             r = bundle.hallucination
             raw = r.raw or {}
             try:
                 self._storage.delete_evaluations(event.trace_id, "hallucination")
             except Exception:
-                logger.exception(
-                    "EvaluationWorker: failed to clear hallucination eval for %s",
-                    event.trace_id,
-                )
+                logger.exception("PERSIST: Failed to clear old hallucination eval for %s", event.trace_id)
+            
+            scores_dict = raw.get("scores", {"overall_risk": r.score})
+            logger.info("PERSIST: Saving hallucination evaluation | trace=%s | label=%s, score=%.3f, confidence=%.3f, category=%s, mode=%s, scores=%s",
+                       event.trace_id, r.label, r.score, r.confidence,
+                       raw.get("category", "unknown"), raw.get("mode", "unknown"), scores_dict)
+            
             rec = EvaluationResultRecord(
                 id=str(uuid.uuid4()),
                 trace_id=event.trace_id,
@@ -817,7 +864,7 @@ class EvaluationWorker:
                 module="hallucination",
                 mode=raw.get("mode", "unknown"),
                 execution_mode=raw.get("execution_mode", "monitoring"),
-                scores=raw.get("scores", {"overall_risk": r.score}),
+                scores=scores_dict,
                 category=raw.get("category", "unknown"),
                 risk_level=r.label,
                 confidence=r.confidence,
@@ -826,21 +873,23 @@ class EvaluationWorker:
             )
             try:
                 self._storage.save_evaluation(rec)
+                eval_count += 1
+                logger.info("PERSIST: Hallucination evaluation saved successfully | trace=%s, record_id=%s", event.trace_id, rec.id)
             except Exception:
-                logger.exception(
-                    "EvaluationWorker: failed to persist hallucination eval for %s",
-                    event.trace_id,
-                )
+                logger.exception("PERSIST: Failed to persist hallucination eval for %s", event.trace_id)
 
         if bundle.adversarial is not None:
             r = bundle.adversarial
             try:
                 self._storage.delete_evaluations(event.trace_id, "adversarial")
             except Exception:
-                logger.exception(
-                    "EvaluationWorker: failed to clear adversarial eval for %s",
-                    event.trace_id,
-                )
+                logger.exception("PERSIST: Failed to clear old adversarial eval for %s", event.trace_id)
+            
+            scores_dict = {"score": r.score}
+            logger.info("PERSIST: Saving adversarial evaluation | trace=%s | label=%s, score=%.3f, confidence=%.3f, category=%s, mode=%s, scores=%s",
+                       event.trace_id, r.label, r.score, r.confidence,
+                       "prompt_injection", "injection_check", scores_dict)
+            
             rec = EvaluationResultRecord(
                 id=str(uuid.uuid4()),
                 trace_id=event.trace_id,
@@ -848,7 +897,7 @@ class EvaluationWorker:
                 module="adversarial",
                 mode="injection_check",
                 execution_mode="monitoring",
-                scores={"score": r.score},
+                scores=scores_dict,
                 category="prompt_injection",
                 risk_level=r.label,
                 confidence=r.confidence,
@@ -857,11 +906,15 @@ class EvaluationWorker:
             )
             try:
                 self._storage.save_evaluation(rec)
+                eval_count += 1
+                logger.info("PERSIST: Adversarial evaluation saved successfully | trace=%s, record_id=%s", event.trace_id, rec.id)
             except Exception:
-                logger.exception(
-                    "EvaluationWorker: failed to persist adversarial eval for %s",
-                    event.trace_id,
-                )
+                logger.exception("PERSIST: Failed to persist adversarial eval for %s", event.trace_id)
+        
+        logger.info("PERSIST: Complete | trace=%s | saved %d evaluations (hallucination=%s, adversarial=%s)",
+                    event.trace_id, eval_count,
+                    "Yes" if bundle.hallucination else "No",
+                    "Yes" if bundle.adversarial else "No")
 
         # ----- Human Review Trigger -----
         should_trigger, trigger_reason = self._should_trigger_review(event, bundle)

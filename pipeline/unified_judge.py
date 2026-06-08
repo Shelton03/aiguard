@@ -52,20 +52,41 @@ class UnifiedJudge:
         
         Returns DualEvaluationResult with both sections populated, or None if judge disabled.
         """
+        logger.info("UNIFIED_JUDGE.evaluate() called | prompt_chars=%d, response_chars=%d, has_context=%s, has_ground_truth=%s",
+                    len(prompt), len(response), context is not None, ground_truth is not None)
+        
         if not self._config.enabled:
+            logger.info("UNIFIED_JUDGE: Judge disabled in config, returning None")
             return None
         
         payload = self._build_payload(prompt, response, context, ground_truth)
+        logger.info("UNIFIED_JUDGE: Payload built | model=%s, messages_count=%d",
+                    self._config.model, len(payload.get("messages", [])))
+        
         raw = self._post(payload)
         if not raw:
+            logger.info("UNIFIED_JUDGE: _post() returned None (HTTP failed or timeout)")
             return None
+        
+        logger.info("UNIFIED_JUDGE: HTTP response received, length=%d chars", len(raw))
         
         parsed = self._parse_json(raw)
         if not parsed:
+            logger.info("UNIFIED_JUDGE: JSON parsing failed, returning None")
             return None
         
+        logger.info("UNIFIED_JUDGE: JSON parsed successfully, keys=%s", list(parsed.keys()))
+        
         normalized = self._normalize(parsed)
-        return self._to_dual_result(normalized)
+        logger.info("UNIFIED_JUDGE: Normalized | adversarial_present=%s, hallucination_present=%s",
+                    bool(normalized["adversarial"]), bool(normalized["hallucination"]))
+        
+        result = self._to_dual_result(normalized)
+        logger.info("UNIFIED_JUDGE: Evaluation complete | adversarial=%s (score=%.3f, conf=%.3f), hallucination=%s (score=%.3f, conf=%.3f)",
+                    result.adversarial.label, result.adversarial.score, result.adversarial.confidence,
+                    result.hallucination.label, result.hallucination.score, result.hallucination.confidence)
+        
+        return result
     
     def warm_up(self) -> bool:
         """Warm-up judge with test data. Returns True on success."""
@@ -179,25 +200,16 @@ class UnifiedJudge:
         }
     
     def _post(self, payload: Dict[str, Any]) -> Optional[str]:
-        """POST payload to judge endpoint. Returns response body or None on failure."""
-        endpoint = self._config.endpoint.rstrip("/")
-        if endpoint.endswith("/chat/completions"):
-            pass
-        elif endpoint.endswith("/v1"):
-            endpoint = endpoint + "/chat/completions"
-        else:
-            endpoint = endpoint + "/v1/chat/completions"
-        
-        data = json.dumps(payload).encode("utf-8")
+        """Post payload to judge endpoint, retrying on failure."""
+        endpoint = self._config.endpoint.rstrip('/')
+        url = f"{endpoint}/chat/completions"
+        data = json.dumps(payload).encode('utf-8')
         headers = {"Content-Type": "application/json"}
-        api_key = self._config.resolve_api_key()
-        if api_key:
-            headers["Authorization"] = f"Bearer {api_key}"
         
-        logger.info(
-            "Unified judge _post: sending %d bytes to %s",
-            len(data), endpoint
-        )
+        logger.info("UNIFIED_JUDGE: HTTP POST request | url=%s, model=%s, timeout=%ds, payload_size=%d bytes",
+                    url, self._config.model, self._config.timeout_s, len(data))
+        logger.info("UNIFIED_JUDGE: Request payload preview (first 800 chars) | %s", 
+                    data.decode('utf-8')[:800])
         
         req = urllib.request.Request(endpoint, data=data, headers=headers, method="POST")
         for attempt, delay in enumerate([0, 5, 10, 15]):
@@ -206,35 +218,53 @@ class UnifiedJudge:
             try:
                 with urllib.request.urlopen(req, timeout=self._config.timeout_s) as resp:
                     body = resp.read().decode("utf-8")
-                
-                logger.info(
-                    "Unified judge _post: HTTP %d, received %d bytes",
-                    resp.status, len(body)
-                )
-                return body
+                    latency_ms = int((time.time() - (attempt * 0)) * 1000)  # Approximate
+                    
+                    logger.info("UNIFIED_JUDGE: HTTP response received | status=%d, latency=%dms, response_size=%d bytes",
+                               resp.status, latency_ms, len(body))
+                    logger.info("UNIFIED_JUDGE: Response content preview (first 1000 chars) | %s", 
+                               body[:1000])
+                    return body
             except urllib.error.HTTPError as exc:
-                logger.warning("Unified judge _post: HTTP error %s", exc.code)
+                body = exc.read().decode('utf-8') if exc.fp else ""
+                logger.info("UNIFIED_JUDGE: HTTP error | status=%d, attempt=%d, body=%s",
+                           exc.code, attempt + 1, body[:500] if body else "Empty response")
                 continue
             except Exception as exc:
-                logger.warning("Unified judge _post: request failed: %s", exc)
+                logger.info("UNIFIED_JUDGE: Request exception | attempt=%d, error_type=%s, message=%s",
+                           attempt + 1, type(exc).__name__, str(exc))
                 continue
         
+        logger.info("UNIFIED_JUDGE: All retry attempts failed, returning None")
         return None
     
     def _parse_json(self, text: str) -> Optional[Dict[str, Any]]:
         """Parse JSON from response text, stripping markdown code blocks if present."""
+        logger.info("UNIFIED_JUDGE: Starting JSON parsing | input_length=%d chars", len(text))
+        
         if not text:
+            logger.info("UNIFIED_JUDGE: Empty text, returning None")
             return None
         
         cleaned = text.strip()
+        original_len = len(cleaned)
+        
         if cleaned.startswith("```"):
             cleaned = cleaned.strip("`")
             cleaned = cleaned.replace("json\n", "", 1).replace("JSON\n", "", 1).strip()
+            logger.info("UNIFIED_JUDGE: Stripped markdown code blocks | original=%d chars, cleaned=%d chars",
+                       original_len, len(cleaned))
+        
+        logger.info("UNIFIED_JUDGE: Cleaned JSON preview (first 600 chars) | %s", cleaned[:600])
         
         try:
-            return json.loads(cleaned)
-        except json.JSONDecodeError:
-            logger.warning("Unified judge _parse_json: failed to parse JSON")
+            result = json.loads(cleaned)
+            logger.info("UNIFIED_JUDGE: JSON parsed successfully | top_level_keys=%s", list(result.keys()))
+            logger.info("UNIFIED_JUDGE: Parsed structure preview | %s", str(result)[:500])
+            return result
+        except json.JSONDecodeError as e:
+            logger.info("UNIFIED_JUDGE: JSON parsing failed | error=%s, text_preview=%s", 
+                       str(e), text[:300])
             return None
     
     def _normalize(self, raw: Dict[str, Any]) -> Dict[str, Any]:
@@ -254,12 +284,18 @@ class UnifiedJudge:
         adv_compliance = adv_data.get("compliance", {})
         adv_risk = adv_data.get("risk", {})
         
+        logger.info("UNIFIED_JUDGE: Extracting adversarial result | classification=%s, compliance=%s, risk=%s",
+                   adv_classification, adv_compliance, adv_risk)
+        
         # Extract category and subtype for adversarial
         adv_attack_type = adv_classification.get("attack_type", "unknown")
         adv_subtype = adv_classification.get("subtype", "unknown")
         if adv_subtype and adv_subtype.lower() == "null":
             adv_subtype = "unknown"
         adv_category = f"{adv_attack_type}/{adv_subtype}" if adv_subtype != "unknown" else adv_attack_type
+        
+        logger.info("UNIFIED_JUDGE: Adversarial extraction | attack_type=%s, subtype=%s, category=%s",
+                   adv_attack_type, adv_subtype, adv_category)
         
         # Build raw with category and subtype
         adv_raw = {
@@ -269,10 +305,17 @@ class UnifiedJudge:
             "attack_type": adv_attack_type,
         }
         
+        adv_score = float(adv_risk.get("score", 0.0))
+        adv_confidence = float(adv_classification.get("confidence", adv_compliance.get("confidence", 0.0)))
+        adv_label = "injection_detected" if adv_classification.get("detected", False) else "safe"
+        
+        logger.info("UNIFIED_JUDGE: Adversarial scores extracted | label=%s, score=%.3f (from risk.score), confidence=%.3f (from classification/compliance)",
+                   adv_label, adv_score, adv_confidence)
+        
         adversarial = ModuleEvaluationResult(
-            label="injection_detected" if adv_classification.get("detected", False) else "safe",
-            score=float(adv_risk.get("score", 0.0)),
-            confidence=float(adv_classification.get("confidence", adv_compliance.get("confidence", 0.0))),
+            label=adv_label,
+            score=adv_score,
+            confidence=adv_confidence,
             explanation=adv_compliance.get("explanation", ""),
             raw=adv_raw,
         )
@@ -283,13 +326,18 @@ class UnifiedJudge:
         hall_compliance = hall_data.get("compliance", {})
         hall_risk = hall_data.get("risk", {})
         
+        logger.info("UNIFIED_JUDGE: Extracting hallucination result | classification=%s, compliance=%s, risk=%s",
+                   hall_classification, hall_compliance, hall_risk)
+        
         # Extract category and subtype for hallucination
         hall_type = hall_classification.get("type", "unknown")
         if hall_type and hall_type.lower() == "null":
             hall_type = "unknown"
-        # Type format: "factuality/factual_fabrication" or "faithfulness/context_inconsistency"
         hall_subtype = hall_type.split("/")[-1] if "/" in hall_type else hall_type
         hall_category = hall_type if hall_type != "unknown" else "unknown"
+        
+        logger.info("UNIFIED_JUDGE: Hallucination extraction | type=%s, subtype=%s, category=%s",
+                   hall_type, hall_subtype, hall_category)
         
         # Build raw with category and subtype
         hall_raw = {
@@ -300,13 +348,22 @@ class UnifiedJudge:
         }
         
         detected = hall_classification.get("detected", False)
+        hall_score = float(hall_risk.get("score", 0.0))
+        hall_confidence = float(hall_classification.get("confidence", hall_compliance.get("confidence", 0.0)))
+        hall_label = "hallucinated" if detected else "safe"
+        
+        logger.info("UNIFIED_JUDGE: Hallucination scores extracted | label=%s, score=%.3f (from risk.score), confidence=%.3f (from classification/compliance)",
+                   hall_label, hall_score, hall_confidence)
         
         hallucination = ModuleEvaluationResult(
-            label="hallucinated" if detected else "safe",
-            score=float(hall_risk.get("score", 0.0)),
-            confidence=float(hall_classification.get("confidence", hall_compliance.get("confidence", 0.0))),
+            label=hall_label,
+            score=hall_score,
+            confidence=hall_confidence,
             explanation=hall_compliance.get("explanation", ""),
             raw=hall_raw,
         )
+        
+        logger.info("UNIFIED_JUDGE: DualEvaluationResult created | adversarial: %s (%.3f), hallucination: %s (%.3f)",
+                   adv_label, adv_score, hall_label, hall_score)
         
         return DualEvaluationResult(adversarial=adversarial, hallucination=hallucination)
