@@ -185,6 +185,10 @@ class EvaluationWorker:
         """Run unified judge evaluation. Falls back to heuristics if judge fails."""
         prompt = _prompt_from_messages(event.input_messages)
         
+        # Extract context and ground_truth from metadata if available
+        context = event.metadata.get("context_documents") if event.metadata else None
+        ground_truth = event.metadata.get("ground_truth") if event.metadata else None
+        
         # Try unified judge if enabled
         if self._config.judge.enabled or force_judge:
             if self._unified_judge is None and UnifiedJudge is not None:
@@ -195,8 +199,8 @@ class EvaluationWorker:
                     unified_result = self._unified_judge.evaluate(
                         prompt=prompt,
                         response=event.output_text,
-                        context=event.context_documents,
-                        ground_truth=event.ground_truth,
+                        context=context,
+                        ground_truth=ground_truth,
                     )
                     
                     if unified_result:
