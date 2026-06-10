@@ -16,6 +16,12 @@
     <h1>{{ project }} <span class="tag">dashboard</span></h1>
     <p class="subtitle">Queue status and calibration context for this project.</p>
 
+    {% if request.args.get('recalibrated') == 'true' %}
+    <div class="alert alert-success">
+      ✓ Recalibration completed successfully.
+    </div>
+    {% endif %}
+
     <div class="stats-row">
       <div class="stat-card">
         <div class="stat-num">{{ pending_count }}</div>
@@ -33,6 +39,15 @@
         <div class="stat-num">{{ cal_state.reviews_since_last_calibration }}</div>
         <div class="stat-label">Reviews Since Calibration</div>
       </div>
+    </div>
+
+    <div class="actions-row" style="margin: 20px 0; text-align: center;">
+      <form method="POST" action="/project/{{ project }}/dashboard/recalibrate" 
+            onsubmit="return confirm('Are you sure you want to manually recalibrate? This will recalculate the scale factor based on all completed reviews.');">
+        <button class="btn btn-secondary" type="submit">
+          🔄 Manually Recalibrate
+        </button>
+      </form>
     </div>
 
     <h2>Pending Reviews</h2>

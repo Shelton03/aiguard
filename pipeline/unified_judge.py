@@ -373,8 +373,15 @@ class UnifiedJudge:
         hall_confidence = float(hall_classification.get("confidence", 0.0))
         hall_source = hall_classification.get("source", "unknown")
         
-        # Extract subtype from type (e.g., "factuality/entity_error" → "entity_error")
-        hall_subtype = hall_type.split("/")[-1] if "/" in hall_type else "unknown"
+        # Extract family and subtype properly
+        if "/" in hall_type:
+            hall_subtype = hall_type.split("/")[-1]  # e.g., "entity_error" from "factuality/entity_error"
+        elif hall_type in ["factuality", "faithfulness"]:
+            hall_subtype = None  # Family only, no specific subtype
+        elif hall_type in ["unknown", "null", None]:
+            hall_subtype = None  # Unknown/missing
+        else:
+            hall_subtype = hall_type  # Assume it's already the subtype
         
         # Extract compliance fields
         hall_compliance_status = hall_data.get("compliance", {}).get("status", "unknown")

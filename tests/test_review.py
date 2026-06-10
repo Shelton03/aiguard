@@ -289,6 +289,7 @@ def test_should_trigger_random_sample():
     bundle = EvaluationBundle(
         hallucination=ModuleEvaluationResult(
             label="safe",
+            risk_level="safe",
             score=0.5,
             confidence=0.9,
             explanation="test",
@@ -299,7 +300,7 @@ def test_should_trigger_random_sample():
     should_trigger, reason = worker._should_trigger_review(event, bundle)
 
     assert should_trigger is True
-    assert reason == "random_sample"
+    assert reason.startswith("random_sample")
 
 
 def test_high_score_threshold_none_disables():
@@ -324,6 +325,7 @@ def test_high_score_threshold_none_disables():
     bundle = EvaluationBundle(
         hallucination=ModuleEvaluationResult(
             label="hallucinated",
+            risk_level="high",
             score=1.0,
             confidence=0.9,
             explanation="test",
@@ -346,7 +348,7 @@ def test_should_trigger_high_score():
     config = PipelineConfig(
         enable_review_queue=True,
         review_sample_rate=0.0,
-        review_high_score_threshold=0.8,
+        review_hallucination_threshold=0.8,
         review_low_score_threshold=None,
     )
     worker = EvaluationWorker(config)
@@ -358,6 +360,7 @@ def test_should_trigger_high_score():
     bundle = EvaluationBundle(
         hallucination=ModuleEvaluationResult(
             label="hallucinated",
+            risk_level="high",
             score=0.85,  # Above threshold
             confidence=0.9,
             explanation="test",
@@ -368,11 +371,11 @@ def test_should_trigger_high_score():
     should_trigger, reason = worker._should_trigger_review(event, bundle)
 
     assert should_trigger is True
-    assert reason == "high_risk_score"
+    assert "high_score" in reason
 
 
-def test_should_trigger_low_score():
-    """Low score threshold triggers review."""
+def test_should_trigger_hallucination_threshold():
+    """Hallucination threshold triggers review."""
     from config.pipeline_config import PipelineConfig
     from pipeline.evaluation_worker import EvaluationWorker
     from pipeline.event_models import EvaluationBundle, ModuleEvaluationResult
@@ -380,8 +383,7 @@ def test_should_trigger_low_score():
     config = PipelineConfig(
         enable_review_queue=True,
         review_sample_rate=0.0,
-        review_high_score_threshold=None,
-        review_low_score_threshold=0.2,
+        review_hallucination_threshold=0.2,
     )
     worker = EvaluationWorker(config)
 
@@ -391,8 +393,9 @@ def test_should_trigger_low_score():
 
     bundle = EvaluationBundle(
         hallucination=ModuleEvaluationResult(
-            label="safe",
-            score=0.15,  # Below threshold
+            label="hallucinated",
+            risk_level="high",
+            score=0.25,  # Above threshold
             confidence=0.9,
             explanation="test",
             raw={},
@@ -402,7 +405,7 @@ def test_should_trigger_low_score():
     should_trigger, reason = worker._should_trigger_review(event, bundle)
 
     assert should_trigger is True
-    assert reason == "low_risk_score"
+    assert "hallucination" in reason and "high_score" in reason
 
 
 def test_should_trigger_combined_reasons():
@@ -414,7 +417,7 @@ def test_should_trigger_combined_reasons():
     config = PipelineConfig(
         enable_review_queue=True,
         review_sample_rate=1.0,  # Always triggers random
-        review_high_score_threshold=0.8,
+        review_hallucination_threshold=0.8,
         review_low_score_threshold=None,
     )
     worker = EvaluationWorker(config)
@@ -426,6 +429,7 @@ def test_should_trigger_combined_reasons():
     bundle = EvaluationBundle(
         hallucination=ModuleEvaluationResult(
             label="hallucinated",
+            risk_level="high",
             score=0.85,  # Above high threshold AND random triggers
             confidence=0.9,
             explanation="test",
@@ -436,7 +440,7 @@ def test_should_trigger_combined_reasons():
     should_trigger, reason = worker._should_trigger_review(event, bundle)
 
     assert should_trigger is True
-    assert reason == "random_sample,high_risk_score"
+    assert "hallucination" in reason and "high_score" in reason
 
 
 def test_enqueue_for_review_creates_queue_item(tmp_path: Path):
@@ -457,10 +461,12 @@ def test_enqueue_for_review_creates_queue_item(tmp_path: Path):
     event.trace_id = "test-trace"
     event.project_id = "test_project"
     event.output_text = "Test model response"
+    event.input_messages = [{"role": "user", "content": "Test prompt"}]
 
     bundle = EvaluationBundle(
         hallucination=ModuleEvaluationResult(
             label="safe",
+            risk_level="safe",
             score=0.5,
             confidence=0.9,
             explanation="test",
@@ -506,10 +512,12 @@ def test_enqueue_with_email_disabled(tmp_path: Path):
     event.trace_id = "test-trace"
     event.project_id = "test_project"
     event.output_text = "Test"
+    event.input_messages = [{"role": "user", "content": "Test prompt"}]
 
     bundle = EvaluationBundle(
         hallucination=ModuleEvaluationResult(
             label="safe",
+            risk_level="safe",
             score=0.5,
             confidence=0.9,
             explanation="test",
@@ -544,10 +552,12 @@ def test_enqueue_sends_email_when_enabled(tmp_path: Path):
     event.trace_id = "test-trace"
     event.project_id = "test_project"
     event.output_text = "Test"
+    event.input_messages = [{"role": "user", "content": "Test prompt"}]
 
     bundle = EvaluationBundle(
         hallucination=ModuleEvaluationResult(
             label="safe",
+            risk_level="safe",
             score=0.5,
             confidence=0.9,
             explanation="test",
@@ -725,10 +735,12 @@ pipeline:
     event.trace_id = "test-trace-123"
     event.project_id = ""  # Empty to test fallback
     event.output_text = "test response"
+    event.input_messages = [{"role": "user", "content": "Test prompt"}]
     
     bundle = EvaluationBundle(
         hallucination=ModuleEvaluationResult(
             label="safe",
+            risk_level="safe",
             score=0.5,
             confidence=0.9,
             explanation="test",

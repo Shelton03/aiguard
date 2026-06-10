@@ -199,13 +199,15 @@ export default function TraceDetail() {
                       Hallucination Details
                     </div>
                     <div className="space-y-1">
-                      {ev.hallucination_type && (
+                      {/* Show family (e.g., "factuality") */}
+                      {ev.hallucination_family && (
                         <div className="text-xs text-slate-700">
-                          <span className="font-semibold text-slate-500">Type:</span>{' '}
-                          <span className="font-medium">{ev.hallucination_type}</span>
+                          <span className="font-semibold text-slate-500">Category:</span>{' '}
+                          <span className="font-medium">{ev.hallucination_family}</span>
                         </div>
                       )}
-                      {ev.hallucination_subtype && ev.hallucination_subtype !== 'unknown' && (
+                      {/* Show subtype (e.g., "entity_error") - only if available */}
+                      {ev.hallucination_subtype && (
                         <div className="text-xs text-slate-700">
                           <span className="font-semibold text-slate-500">Subtype:</span>{' '}
                           <span className="font-medium">{ev.hallucination_subtype}</span>

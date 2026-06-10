@@ -390,6 +390,7 @@ class EvaluationWorker:
         return ModuleEvaluationResult(
             label=label,
             score=float(overall_risk),
+            risk_level=_risk_label(float(overall_risk)),
             confidence=float(result.confidence),
             explanation=result.reasoning or "",
             raw=result.to_dict(),
@@ -404,14 +405,11 @@ class EvaluationWorker:
     ) -> tuple[bool, str]:
         """
         Determine if this evaluation should trigger a human review.
-
+        
         Checks (in order):
-        1. Random sampling (primary mechanism, configurable rate)
-        2. High score threshold (optional, if configured)
-        3. Low score threshold (optional, if configured)
-
-        Multiple triggers combine reasons with comma separator
-        (e.g., "random_sample,high_risk_score").
+        1. Adversarial threshold (if configured)
+        2. Hallucination threshold (if configured)
+        3. Random sampling (primary mechanism, configurable rate)
 
         Returns:
             tuple: (should_trigger: bool, trigger_reason: str)
@@ -419,43 +417,28 @@ class EvaluationWorker:
         if not self._config.enable_review_queue:
             return False, ""
 
-        # Extract score from bundle (prioritize hallucination, fallback to adversarial)
-        score: float | None = None
-        if bundle.hallucination is not None:
-            score = bundle.hallucination.score
-        elif bundle.adversarial is not None:
-            score = bundle.adversarial.score
+        # Check adversarial module threshold
+        if (bundle.adversarial is not None and 
+            self._config.review_adversarial_threshold is not None and
+            bundle.adversarial.score >= self._config.review_adversarial_threshold):
+            return True, f"adversarial_high_score:{bundle.adversarial.score:.4f}"
 
-        if score is None:
-            return False, ""
+        # Check hallucination module threshold
+        if (bundle.hallucination is not None and 
+            self._config.review_hallucination_threshold is not None and
+            bundle.hallucination.score >= self._config.review_hallucination_threshold):
+            return True, f"hallucination_high_score:{bundle.hallucination.score:.4f}"
 
-        reasons: list[str] = []
-
-        # 1. Random sampling (primary mechanism)
-        if random.random() < self._config.review_sample_rate:
-            reasons.append("random_sample")
-
-        # 2. High score threshold (None = disabled)
-        if (self._config.review_high_score_threshold is not None
-                and score >= self._config.review_high_score_threshold):
-            reasons.append("high_risk_score")
-
-        # 3. Low score threshold (None = disabled)
-        if (self._config.review_low_score_threshold is not None
-                and score <= self._config.review_low_score_threshold):
-            reasons.append("low_risk_score")
-
-        if not reasons:
-            return False, ""
-
-        # Combine reasons (e.g., "random_sample,high_risk_score")
-        combined_reason = ",".join(reasons)
-        logger.info(
-            "Review trigger detected: trace=%s score=%.4f reasons=%s",
-            event.trace_id,
-            score,
-            combined_reason,
-        )
+        # Fallback to random sampling
+        if self._config.review_sample_rate > 0:
+            if random.random() < self._config.review_sample_rate:
+                # Determine which module to sample from
+                if bundle.hallucination is not None:
+                    return True, f"random_sample:{bundle.hallucination.score:.4f}"
+                elif bundle.adversarial is not None:
+                    return True, f"random_sample:{bundle.adversarial.score:.4f}"
+        
+        return False, ""
         return True, combined_reason
 
     def _enqueue_for_review(
@@ -472,18 +455,57 @@ class EvaluationWorker:
             bundle: Evaluation results bundle
             trigger_reason: Comma-separated list of trigger reasons
         """
-        # Extract evaluation data (prioritize hallucination, fallback to adversarial)
-        if bundle.hallucination is not None:
-            raw_score = bundle.hallucination.score
-            module_type = "hallucination"
-            model_response = event.output_text or ""
-        elif bundle.adversarial is not None:
+        # Extract prompt from event
+        prompt = _prompt_from_messages(event.input_messages)
+        
+        # Build judge details based on which module triggered
+        judge_details: Optional[Dict[str, Any]] = None
+        
+        if "adversarial" in trigger_reason and bundle.adversarial:
+            judge_details = {
+                "module": "adversarial",
+                "label": bundle.adversarial.label,
+                "explanation": bundle.adversarial.explanation,
+                "confidence": bundle.adversarial.confidence,
+                **bundle.adversarial.raw  # Includes patterns_found, attack_type, subtype, etc.
+            }
+        elif "hallucination" in trigger_reason and bundle.hallucination:
+            judge_details = {
+                "module": "hallucination",
+                "label": bundle.hallucination.label,
+                "explanation": bundle.hallucination.explanation,
+                "confidence": bundle.hallucination.confidence,
+                **bundle.hallucination.raw  # Includes type, subtype, source, etc.
+            }
+        
+        # Use trigger_reason to determine which module actually triggered
+        if "adversarial" in trigger_reason:
+            if bundle.adversarial is None:
+                logger.warning("Adversarial trigger but no adversarial result available")
+                return
             raw_score = bundle.adversarial.score
             module_type = "adversarial"
             model_response = event.output_text or ""
+        elif "hallucination" in trigger_reason:
+            if bundle.hallucination is None:
+                logger.warning("Hallucination trigger but no hallucination result available")
+                return
+            raw_score = bundle.hallucination.score
+            module_type = "hallucination"
+            model_response = event.output_text or ""
         else:
-            logger.warning("No evaluation data available for review queue")
-            return
+            # Fallback for random sampling: prioritize hallucination
+            if bundle.hallucination is not None:
+                raw_score = bundle.hallucination.score
+                module_type = "hallucination"
+                model_response = event.output_text or ""
+            elif bundle.adversarial is not None:
+                raw_score = bundle.adversarial.score
+                module_type = "adversarial"
+                model_response = event.output_text or ""
+            else:
+                logger.warning("No evaluation data available for review queue")
+                return
 
         # Initialize review queue (per-project DB)
         project_id = event.project_id or self._config.project_id or "default"
@@ -495,10 +517,12 @@ class EvaluationWorker:
         item = queue.enqueue(
             evaluation_id=event.trace_id,
             module_type=module_type,
+            prompt=prompt,
             model_response=model_response,
             raw_score=raw_score,
             calibrated_score=raw_score,  # Will be calibrated by UI
             trigger_reason=trigger_reason,
+            judge_details=judge_details,
         )
 
         logger.info(
@@ -815,6 +839,7 @@ class EvaluationWorker:
         return ModuleEvaluationResult(
             label=label,
             score=score,
+            risk_level=_risk_label(score),
             confidence=confidence,
             explanation=explanation,
             raw=raw,
@@ -875,7 +900,15 @@ class EvaluationWorker:
             hall_classification = hallucination_data.get("classification", {}).get("hallucination", {})
             
             hallucination_type = hall_classification.get("type", "unknown")
-            hallucination_subtype = hallucination_type.split("/")[-1] if "/" in hallucination_type else "unknown"
+            # Extract family and subtype properly
+            if "/" in hallucination_type:
+                hallucination_subtype = hallucination_type.split("/")[-1]
+            elif hallucination_type in ["factuality", "faithfulness"]:
+                hallucination_subtype = None  # Family only, no specific subtype
+            elif hallucination_type in ["unknown", "null", None]:
+                hallucination_subtype = None  # Unknown/missing
+            else:
+                hallucination_subtype = hallucination_type
             source = hall_classification.get("source", "unknown")
             compliance_status = hallucination_data.get("compliance_status", hallucination_data.get("compliance", {}).get("status", "unknown"))
             risk_reason = hallucination_data.get("risk_reason", hallucination_data.get("risk", {}).get("reason", ""))

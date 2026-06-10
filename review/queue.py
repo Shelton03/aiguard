@@ -1,6 +1,7 @@
 """Review queue management — enqueue, fetch, complete."""
 from __future__ import annotations
 
+import json
 import secrets
 import sqlite3
 from datetime import datetime, timezone
@@ -60,10 +61,12 @@ class ReviewQueue:
                 evaluation_id      TEXT NOT NULL,
                 project_name       TEXT NOT NULL,
                 module_type        TEXT NOT NULL,
+                prompt             TEXT,
                 model_response     TEXT NOT NULL,
                 raw_score          REAL NOT NULL,
                 calibrated_score   REAL NOT NULL,
                 trigger_reason     TEXT NOT NULL,
+                judge_details      TEXT,
                 status             TEXT NOT NULL DEFAULT 'pending',
                 review_token       TEXT NOT NULL UNIQUE,
                 created_at         TEXT NOT NULL,
@@ -92,10 +95,12 @@ class ReviewQueue:
         *,
         evaluation_id: str,
         module_type: str,
+        prompt: Optional[str] = None,
         model_response: str,
         raw_score: float,
         calibrated_score: float,
         trigger_reason: str,
+        judge_details: Optional[Dict[str, Any]] = None,
     ) -> ReviewQueueItem:
         """Add an item to the review queue and return it (with token set)."""
         item = ReviewQueueItem(
@@ -103,10 +108,12 @@ class ReviewQueue:
             evaluation_id=evaluation_id,
             project_name=self.project,
             module_type=module_type,
+            prompt=prompt,
             model_response=model_response,
             raw_score=raw_score,
             calibrated_score=calibrated_score,
             trigger_reason=trigger_reason,
+            judge_details=json.dumps(judge_details) if judge_details else None,
             review_token=generate_secure_token(),
             created_at=datetime.now(timezone.utc).replace(tzinfo=None),
         )
@@ -114,20 +121,22 @@ class ReviewQueue:
         cur.execute(
             """
             INSERT INTO review_queue
-                (id, evaluation_id, project_name, module_type, model_response,
-                 raw_score, calibrated_score, trigger_reason, status,
-                 review_token, created_at, completed_at)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+                (id, evaluation_id, project_name, module_type, prompt, model_response,
+                 raw_score, calibrated_score, trigger_reason, judge_details,
+                 status, review_token, created_at, completed_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """,
             (
                 item.id,
                 item.evaluation_id,
                 item.project_name,
                 item.module_type,
+                item.prompt,
                 item.model_response,
                 item.raw_score,
                 item.calibrated_score,
                 item.trigger_reason,
+                item.judge_details,
                 item.status.value,
                 item.review_token,
                 item.created_at.isoformat(),
@@ -235,10 +244,12 @@ class ReviewQueue:
             evaluation_id=row["evaluation_id"],
             project_name=row["project_name"],
             module_type=row["module_type"],
+            prompt=row["prompt"],
             model_response=row["model_response"],
             raw_score=row["raw_score"],
             calibrated_score=row["calibrated_score"],
             trigger_reason=row["trigger_reason"],
+            judge_details=row["judge_details"],
             status=ReviewStatus(row["status"]),
             review_token=row["review_token"],
             created_at=datetime.fromisoformat(row["created_at"]),

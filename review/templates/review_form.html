@@ -24,16 +24,59 @@
       <table>
         <tr><th>Project</th><td>{{ project }}</td></tr>
         <tr><th>Module</th><td>{{ item.module_type }}</td></tr>
+        {% if item %}
         <tr><th>Raw Score</th><td>{{ item.raw_score | round(4) }}</td></tr>
         <tr><th>Calibrated Score</th><td>{{ item.calibrated_score | round(4) }}</td></tr>
         <tr><th>Trigger</th><td>{{ item.trigger_reason }}</td></tr>
         <tr><th>Created</th><td>{{ item.created_at.strftime('%Y-%m-%d %H:%M UTC') }}</td></tr>
+        {% else %}
+        <tr><td colspan="2">Review item not available</td></tr>
+        {% endif %}
       </table>
     </section>
 
     <section class="review-response card">
+      <h2>User Request</h2>
+      <pre class="response-box">{{ item.prompt or "No request available" }}</pre>
+      
       <h2>Model Response</h2>
       <pre class="response-box">{{ item.model_response }}</pre>
+      
+      {% if item.judge_details %}
+      <h2>Evaluation Details</h2>
+      <div class="judge-details card">
+        <table>
+          <tr><th>Module</th><td>{{ item.judge_details.module }}</td></tr>
+          <tr><th>Label</th><td>{{ item.judge_details.label }}</td></tr>
+          <tr><th>Confidence</th><td>{{ item.judge_details.confidence | round(4) }}</td></tr>
+          <tr><th>Explanation</th><td>{{ item.judge_details.explanation }}</td></tr>
+          
+          <!-- Adversarial-specific fields -->
+          {% if item.judge_details.attack_type %}
+          <tr><th>Attack Type</th><td>{{ item.judge_details.attack_type }}</td></tr>
+          {% endif %}
+          {% if item.judge_details.subtype %}
+          <tr><th>Subtype</th><td>{{ item.judge_details.subtype }}</td></tr>
+          {% endif %}
+          {% if item.judge_details.compliance %}
+          <tr><th>Compliance</th><td>{{ item.judge_details.compliance }}</td></tr>
+          {% endif %}
+          
+          <!-- Heuristic fields (patterns found) -->
+          {% if item.judge_details.patterns_found %}
+          <tr><th>Detected Keywords/Phrases</th><td>{{ item.judge_details.patterns_found | join(', ') }}</td></tr>
+          {% endif %}
+          
+          <!-- Hallucination-specific fields -->
+          {% if item.judge_details.type %}
+          <tr><th>Hallucination Type</th><td>{{ item.judge_details.type }}</td></tr>
+          {% endif %}
+          {% if item.judge_details.source %}
+          <tr><th>Source</th><td>{{ item.judge_details.source }}</td></tr>
+          {% endif %}
+        </table>
+      </div>
+      {% endif %}
     </section>
 
     <form class="card" method="POST" action="/project/{{ project }}/review/{{ token }}">

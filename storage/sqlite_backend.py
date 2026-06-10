@@ -131,7 +131,7 @@ class SQLiteBackend(BaseBackend):
             col_name = col_def.split()[0]
             if col_name not in cols:
                 conn.execute(f"ALTER TABLE evaluation_results ADD COLUMN {col_def}")
-                logger.info("Added column to evaluation_results: %s", col_name)
+                
 
     def save_test_case(self, project: str, case: TestCase) -> None:
         with self._connect() as conn:

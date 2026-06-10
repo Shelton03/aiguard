@@ -132,10 +132,10 @@ export default function TraceTable({ traces = [] }) {
                   <LabelBadge label={t.hallucination_label} />
                   {t.hallucination_label !== 'safe' && (
                     <>
-                      {t.hallucination_type && <CategoryBadge value={t.hallucination_type} />}
-                      {t.hallucination_subtype && t.hallucination_subtype !== 'unknown' && (
-                        <CategoryBadge value={t.hallucination_subtype} />
-                      )}
+                      {/* Show family badge */}
+                      {t.hallucination_family && <CategoryBadge value={t.hallucination_family} />}
+                      {/* Show subtype badge - only if available */}
+                      {t.hallucination_subtype && <CategoryBadge value={t.hallucination_subtype} />}
                       {t.source && t.source !== 'unknown' && (
                         <CategoryBadge value={t.source} />
                       )}

@@ -30,6 +30,8 @@ class ReviewQueueItem:
     raw_score: float
     calibrated_score: float
     trigger_reason: str
+    prompt: Optional[str] = None
+    judge_details: Optional[str] = None  # JSON string with evaluation details
     status: ReviewStatus = ReviewStatus.PENDING
     review_token: str = ""           # secure random token (set on creation)
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))

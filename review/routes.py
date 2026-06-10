@@ -213,3 +213,19 @@ async def submit_review(
             "version": _VERSION,
         },
     )
+
+
+@router.post("/project/{project_name}/dashboard/recalibrate", response_class=HTMLResponse)
+async def recalibrate_dashboard(
+    request: Request, project_name: str
+) -> HTMLResponse:
+    """Manually trigger recalibration with confirmation."""
+    db_path = _db_path_for(project_name)
+    
+    with CalibrationManager(db_path=db_path, project=project_name) as cal:
+        cal.force_recalibration()
+    
+    return RedirectResponse(
+        url=f"/project/{project_name}/dashboard?recalibrated=true",
+        status_code=303,
+    )

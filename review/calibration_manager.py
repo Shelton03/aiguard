@@ -165,6 +165,25 @@ class CalibrationManager:
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         self._recalibrate(now)
 
+    def force_recalibration(self) -> None:
+        """Manually trigger recalibration regardless of review count."""
+        # Reset counter
+        self._state.reviews_since_last_calibration = 0
+        self._state.last_calibration_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        
+        # Recalculate scale factor
+        new_scale = self._compute_scale_from_labels()
+        self._state.scale_factor = new_scale
+        
+        # Persist changes
+        self._persist(self._state)
+        
+        logger.info(
+            "Manual recalibration triggered for project=%s: scale_factor=%.4f",
+            self.project,
+            new_scale,
+        )
+
     def _recalibrate(self, now: datetime) -> None:
         """
         Recompute scale_factor based on accumulated review data.
