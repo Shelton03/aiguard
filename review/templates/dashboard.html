@@ -16,7 +16,7 @@
     <h1>{{ project }} <span class="tag">dashboard</span></h1>
     <p class="subtitle">Queue status and calibration context for this project.</p>
 
-    {% if request.args.get('recalibrated') == 'true' %}
+    {% if request.query_params.get('recalibrated') == 'true' %}
     <div class="alert alert-success">
       ✓ Recalibration completed successfully.
     </div>

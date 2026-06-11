@@ -47,16 +47,16 @@ class EvaluationResultRecord:
     confidence: float
     created_at: datetime
     
-    # NEW FIELDS - Adversarial-specific
+    # Adversarial-specific
     attack_type: Optional[str] = None
     subtype: Optional[str] = None
     
-    # NEW FIELDS - Hallucination-specific
+    #  Hallucination-specific
     hallucination_type: Optional[str] = None
     hallucination_subtype: Optional[str] = None
     source: Optional[str] = None
     
-    # NEW FIELDS - Both modules
+    #  Both modules
     compliance_status: Optional[str] = None
     explanation: Optional[str] = None
     risk_reason: Optional[str] = None

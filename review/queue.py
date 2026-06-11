@@ -256,7 +256,7 @@ class ReviewQueue:
             raw_score=row["raw_score"],
             calibrated_score=row["calibrated_score"],
             trigger_reason=row["trigger_reason"],
-            judge_details=row["judge_details"],
+            judge_details=json.loads(row["judge_details"]) if row["judge_details"] else None,
             status=ReviewStatus(row["status"]),
             review_token=row["review_token"],
             created_at=datetime.fromisoformat(row["created_at"]),
