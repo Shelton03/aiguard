@@ -15,7 +15,7 @@ import threading
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List
+from typing import Dict, List, Optional, Any
 
 from config.pipeline_config import PipelineConfig
 from pipeline.event_models import (
@@ -463,6 +463,70 @@ class EvaluationWorker:
         return False, ""
         return True, combined_reason
 
+    def _build_adversarial_judge_details(self, adversarial_bundle: ModuleEvaluationResult) -> Dict[str, Any]:
+        """Build judge details dict from adversarial bundle with proper field prefixing."""
+        raw = adversarial_bundle.raw or {}
+        return {
+            # Keep unprefixed for Scenarios 1 & 2 (backward compatibility)
+            "module": "adversarial",
+            "label": adversarial_bundle.label,
+            "explanation": adversarial_bundle.explanation,
+            "confidence": adversarial_bundle.confidence,
+            
+            # Add prefixed keys for Scenario 3 (template-needed fields)
+            "adversarial_label": adversarial_bundle.label,
+            "adversarial_explanation": adversarial_bundle.explanation,
+            "adversarial_confidence": adversarial_bundle.confidence,
+            "adversarial_risk_level": adversarial_bundle.risk_level,
+            "adversarial_attack_type": raw.get("attack_type") or raw.get("category"),
+            "adversarial_subtype": raw.get("subtype"),
+            "adversarial_subtypes": raw.get("subtypes", []),
+            "adversarial_risk_reason": raw.get("risk_reason") or raw.get("explanation") or adversarial_bundle.explanation,
+            
+            # Keep raw spread for additional fields (classification, compliance, risk, etc.)
+            **{f"adversarial_{k}": v for k, v in raw.items()},
+        }
+
+    def _build_hallucination_judge_details(self, hallucination_bundle: ModuleEvaluationResult) -> Dict[str, Any]:
+        """Build judge details dict from hallucination bundle with proper field prefixing."""
+        raw = hallucination_bundle.raw or {}
+        taxonomy = raw.get("metadata", {}).get("taxonomy") if isinstance(raw.get("metadata"), dict) else None
+        
+        return {
+            # Keep unprefixed for Scenarios 1 & 2 (backward compatibility)
+            "module": "hallucination",
+            "label": hallucination_bundle.label,
+            "explanation": hallucination_bundle.explanation,
+            "confidence": hallucination_bundle.confidence,
+            
+            # Add prefixed keys for Scenario 3 (template-needed fields)
+            "hallucination_label": hallucination_bundle.label,
+            "hallucination_explanation": hallucination_bundle.explanation,
+            "hallucination_confidence": hallucination_bundle.confidence,
+            "hallucination_risk_level": hallucination_bundle.risk_level,
+            "hallucination_type": raw.get("category"),
+            "hallucination_source": raw.get("source") or (taxonomy.get("source") if isinstance(taxonomy, dict) else None),
+            "hallucination_patterns_found": raw.get("patterns_found", []),
+            "hallucination_category": raw.get("category"),
+            "hallucination_subtypes": raw.get("subtypes", []),
+            "hallucination_risk_reason": raw.get("reasoning") or hallucination_bundle.explanation,
+            
+            # Keep raw spread for additional fields (classification, compliance, risk, etc.)
+            **{f"hallucination_{k}": v for k, v in raw.items()},
+        }
+
+    def _detect_heuristic_only(self, bundle: EvaluationBundle) -> bool:
+        """Detect if evaluation is based on heuristic-only (no LLM judge)."""
+        if bundle.hallucination and bundle.hallucination.raw:
+            raw = bundle.hallucination.raw
+            if raw.get("judge_type") == "heuristic" or raw.get("heuristic_only"):
+                return True
+        if bundle.adversarial and bundle.adversarial.raw:
+            raw = bundle.adversarial.raw
+            if raw.get("judge_type") == "heuristic" or raw.get("heuristic_only"):
+                return True
+        return False
+
     def _enqueue_for_review(
         self,
         event: TraceCreatedEvent,
@@ -480,54 +544,89 @@ class EvaluationWorker:
         # Extract prompt from event
         prompt = _prompt_from_messages(event.input_messages)
         
-        # Build judge details based on which module triggered
-        judge_details: Optional[Dict[str, Any]] = None
+        # Check if this is a random sample trigger (Scenario 3)
+        is_random_sample = trigger_reason.startswith("random_sample")
         
-        if "adversarial" in trigger_reason and bundle.adversarial:
+        # Build judge details based on trigger type
+        judge_details: Optional[Dict[str, Any]] = None
+        review_context: Optional[str] = None
+        review_reason: Optional[str] = None
+        
+        if is_random_sample:
+            # Scenario 3: Random sampling - merge BOTH bundles with proper field prefixing
+            if bundle.hallucination is not None and bundle.adversarial is not None:
+                # Both bundles available: merge with hallucination first, then adversarial
+                judge_details = self._build_hallucination_judge_details(bundle.hallucination)
+                adversarial_details = self._build_adversarial_judge_details(bundle.adversarial)
+                judge_details.update(adversarial_details)
+                review_context = "complete_view"
+                review_reason = "random_sample"
+            elif bundle.hallucination is not None:
+                # Only hallucination available
+                judge_details = self._build_hallucination_judge_details(bundle.hallucination)
+                review_context = "hallucination_only"
+                review_reason = "random_sample"
+            elif bundle.adversarial is not None:
+                # Only adversarial available
+                judge_details = self._build_adversarial_judge_details(bundle.adversarial)
+                review_context = "adversarial_only"
+                review_reason = "random_sample"
+            else:
+                logger.warning("No evaluation data available for review queue")
+                return
+            
+            # Set module_type based on priority (hallucination first)
+            if bundle.hallucination is not None:
+                module_type = "hallucination"
+                raw_score = bundle.hallucination.score
+            else:
+                module_type = "adversarial"
+                raw_score = bundle.adversarial.score if bundle.adversarial else 0.0
+            model_response = event.output_text or ""
+            
+        elif "adversarial" in trigger_reason:
+            # Scenario 1: Adversarial threshold trigger - keep existing logic
+            if bundle.adversarial is None:
+                logger.warning("Adversarial trigger but no adversarial result available")
+                return
             judge_details = {
                 "module": "adversarial",
                 "label": bundle.adversarial.label,
                 "explanation": bundle.adversarial.explanation,
                 "confidence": bundle.adversarial.confidence,
-                **bundle.adversarial.raw  # Includes patterns_found, attack_type, subtype, etc.
+                **bundle.adversarial.raw
             }
-        elif "hallucination" in trigger_reason and bundle.hallucination:
+            raw_score = bundle.adversarial.score
+            module_type = "adversarial"
+            model_response = event.output_text or ""
+            review_context = None
+            review_reason = None
+            
+        elif "hallucination" in trigger_reason:
+            # Scenario 2: Hallucination threshold trigger - keep existing logic
+            if bundle.hallucination is None:
+                logger.warning("Hallucination trigger but no hallucination result available")
+                return
             judge_details = {
                 "module": "hallucination",
                 "label": bundle.hallucination.label,
                 "explanation": bundle.hallucination.explanation,
                 "confidence": bundle.hallucination.confidence,
-                **bundle.hallucination.raw  # Includes type, subtype, source, etc.
+                **bundle.hallucination.raw
             }
-        
-        # Use trigger_reason to determine which module actually triggered
-        if "adversarial" in trigger_reason:
-            if bundle.adversarial is None:
-                logger.warning("Adversarial trigger but no adversarial result available")
-                return
-            raw_score = bundle.adversarial.score
-            module_type = "adversarial"
-            model_response = event.output_text or ""
-        elif "hallucination" in trigger_reason:
-            if bundle.hallucination is None:
-                logger.warning("Hallucination trigger but no hallucination result available")
-                return
             raw_score = bundle.hallucination.score
             module_type = "hallucination"
             model_response = event.output_text or ""
+            review_context = None
+            review_reason = None
         else:
-            # Fallback for random sampling: prioritize hallucination
-            if bundle.hallucination is not None:
-                raw_score = bundle.hallucination.score
-                module_type = "hallucination"
-                model_response = event.output_text or ""
-            elif bundle.adversarial is not None:
-                raw_score = bundle.adversarial.score
-                module_type = "adversarial"
-                model_response = event.output_text or ""
-            else:
-                logger.warning("No evaluation data available for review queue")
-                return
+            logger.warning("Unknown trigger reason for review queue")
+            return
+        
+        # Detect heuristic-only evaluation
+        if self._detect_heuristic_only(bundle):
+            if judge_details:
+                judge_details["heuristic_only"] = True
 
         # Initialize review queue (per-project DB)
         project_id = event.project_id or self._config.project_id or "default"

@@ -4,11 +4,15 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>AIGuard Review — {{ project }}</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
   <link rel="stylesheet" href="/static/form.css"/>
+  <style>
+    .logo img { height: 36px; vertical-align: middle; }
+  </style>
 </head>
 <body>
   <header>
-    <span class="logo">⚙ AIGuard</span>
+    <span class="logo"><img src="/static/logo.png" alt="AIGuard"/></span>
     <a class="back" href="/project/{{ project }}/dashboard">← Dashboard</a>
   </header>
 
@@ -45,12 +49,97 @@
       {% if item.judge_details %}
       <h2>Evaluation Details</h2>
       <div class="judge-details card">
+        <!-- Context badge for Scenario 3 (random sampling) -->
+        {% if review_context == 'complete_view' %}
+        <div class="badge badge-primary"><i class="fas fa-random"></i> Random Sample - Complete View</div>
+        {% endif %}
+        
+        <!-- Heuristic-only badge -->
+        {% if item.judge_details['heuristic_only'] is defined and item.judge_details['heuristic_only'] %}
+        <div class="badge badge-warning"><i class="fas fa-search"></i> Heuristic Only</div>
+        {% endif %}
+        
+        <!-- Judge-enabled badge -->
+        {% if item.judge_details['heuristic_only'] is defined and not item.judge_details['heuristic_only'] %}
+        <div class="badge badge-success"><i class="fas fa-check-circle"></i> Judge Enabled</div>
+        {% endif %}
+        
         <table>
           <!-- Common fields (both structures) -->
           <tr><th>Module</th><td>{{ item.judge_details['module'] }}</td></tr>
           <tr><th>Label</th><td>{{ item.judge_details['label'] }}</td></tr>
           <tr><th>Confidence</th><td>{{ item.judge_details['confidence'] | round(4) }}</td></tr>
-          <tr><th>Explanation</th><td>{{ item.judge_details['explanation'] }}</td></tr>
+          <tr><th>Explanation</th><td class="explanation">{{ item.judge_details['explanation'] }}</td></tr>
+          
+          <!-- Scenario 3 (nested structure) vs Scenarios 1 & 2 (flat structure) -->
+           {% if item.judge_details.get('hallucination_label') or item.judge_details.get('hallucination_risk_level') %}
+           <!-- Scenario 3: Flat structure with prefixed fields -->
+           
+           <!-- Hallucination Section (FIRST) -->
+           <tr><td colspan="2" class="section-header"><i class="fas fa-search"></i> <strong>Hallucination Analysis</strong></td></tr>
+           <tr>
+             <th>Risk Level</th>
+             <td>
+               {% set h_risk = item.judge_details.get('hallucination_risk_level', 'N/A') %}
+               {% if h_risk == 'high' %}
+               <span class="badge badge-danger">{{ h_risk | upper }}</span>
+               {% elif h_risk == 'medium' %}
+               <span class="badge badge-warning">{{ h_risk | upper }}</span>
+               {% elif h_risk == 'low' %}
+               <span class="badge badge-info">{{ h_risk | upper }}</span>
+               {% else %}
+               {{ h_risk }}
+               {% endif %}
+             </td>
+           </tr>
+           {% if item.judge_details.get('hallucination_type') %}
+           <tr><th>Type</th><td>{{ item.judge_details.get('hallucination_type', 'N/A') }}</td></tr>
+           {% endif %}
+           {% if item.judge_details.get('hallucination_source') %}
+           <tr><th>Source</th><td>{{ item.judge_details.get('hallucination_source', 'N/A') }}</td></tr>
+           {% endif %}
+           {% if item.judge_details.get('hallucination_patterns_found') %}
+           <tr><th>Detected Patterns</th><td>{{ (item.judge_details.get('hallucination_patterns_found', [])) | join(', ') }}</td></tr>
+           {% endif %}
+           {% if item.judge_details.get('hallucination_category') %}
+           <tr><th>Category</th><td>{{ item.judge_details.get('hallucination_category', 'N/A') }}</td></tr>
+           {% endif %}
+           {% if item.judge_details.get('hallucination_subtypes') %}
+           <tr><th>Subtypes</th><td>{{ (item.judge_details.get('hallucination_subtypes', [])) | join(', ') }}</td></tr>
+           {% endif %}
+           {% if item.judge_details.get('hallucination_risk_reason') %}
+           <tr><th>Risk Reason</th><td class="explanation">{{ item.judge_details.get('hallucination_risk_reason', 'N/A') }}</td></tr>
+           {% endif %}
+           
+           <!-- Adversarial Section (SECOND) -->
+           <tr><td colspan="2" class="section-header"><i class="fas fa-shield-alt"></i> <strong>Adversarial Analysis</strong></td></tr>
+           <tr>
+             <th>Risk Level</th>
+             <td>
+               {% set a_risk = item.judge_details.get('adversarial_risk_level', 'N/A') %}
+               {% if a_risk == 'high' %}
+               <span class="badge badge-danger">{{ a_risk | upper }}</span>
+               {% elif a_risk == 'medium' %}
+               <span class="badge badge-warning">{{ a_risk | upper }}</span>
+               {% elif a_risk == 'low' %}
+               <span class="badge badge-info">{{ a_risk | upper }}</span>
+               {% else %}
+               {{ a_risk }}
+               {% endif %}
+             </td>
+           </tr>
+           {% if item.judge_details.get('adversarial_attack_type') %}
+           <tr><th>Attack Type</th><td>{{ item.judge_details.get('adversarial_attack_type', 'N/A') }}</td></tr>
+           {% endif %}
+           {% if item.judge_details.get('adversarial_subtype') %}
+           <tr><th>Subtype</th><td>{{ item.judge_details.get('adversarial_subtype', 'N/A') }}</td></tr>
+           {% endif %}
+           {% if item.judge_details.get('adversarial_risk_reason') %}
+           <tr><th>Risk Reason</th><td class="explanation">{{ item.judge_details.get('adversarial_risk_reason', 'N/A') }}</td></tr>
+           {% endif %}
+          
+          {% else %}
+          <!-- Scenarios 1 & 2: Flat structure (original fields) -->
           
           <!-- Unified Judge fields (Structure A) -->
           {% if item.judge_details['attack_type'] %}
@@ -84,8 +173,6 @@
           {% if item.judge_details['subtypes'] %}
           <tr><th>Subtypes</th><td>{{ item.judge_details['subtypes'] | join(', ') }}</td></tr>
           {% endif %}
-          {% if item.judge_details['heuristic_only'] is defined %}
-          <tr><th>Evaluation Method</th><td>{{ "Heuristic Only" if item.judge_details['heuristic_only'] else "Heuristic + Judge" }}</td></tr>
           {% endif %}
         </table>
       </div>

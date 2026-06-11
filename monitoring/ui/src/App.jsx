@@ -1,5 +1,6 @@
 import React from 'react'
 import { BrowserRouter, Link, NavLink, Route, Routes } from 'react-router-dom'
+import logo from './assets/logo.png'
 import Dashboard from './pages/Dashboard.jsx'
 import ReviewQueue from './pages/ReviewQueue.jsx'
 import TraceDetail from './pages/TraceDetail.jsx'
@@ -18,8 +19,9 @@ export default function App() {
         {/* Top nav */}
         <nav className="bg-brand-600 text-white shadow">
           <div className="max-w-7xl mx-auto px-4 flex items-center h-14 gap-8">
-            <Link to="/" className="font-bold text-lg tracking-tight">
-              ✦ AIGuard
+            <Link to="/" className="flex items-center gap-2">
+              <img src={logo} alt="AIGuard" className="h-8 w-auto" />
+              <span className="font-bold text-lg tracking-tight">AIGuard</span>
             </Link>
             {NAV_LINKS.map(({ to, label }) => (
               <NavLink
