@@ -46,33 +46,46 @@
       <h2>Evaluation Details</h2>
       <div class="judge-details card">
         <table>
-          <tr><th>Module</th><td>{{ item.judge_details.module }}</td></tr>
-          <tr><th>Label</th><td>{{ item.judge_details.label }}</td></tr>
-          <tr><th>Confidence</th><td>{{ item.judge_details.confidence | round(4) }}</td></tr>
-          <tr><th>Explanation</th><td>{{ item.judge_details.explanation }}</td></tr>
+          <!-- Common fields (both structures) -->
+          <tr><th>Module</th><td>{{ item.judge_details['module'] }}</td></tr>
+          <tr><th>Label</th><td>{{ item.judge_details['label'] }}</td></tr>
+          <tr><th>Confidence</th><td>{{ item.judge_details['confidence'] | round(4) }}</td></tr>
+          <tr><th>Explanation</th><td>{{ item.judge_details['explanation'] }}</td></tr>
           
-          <!-- Adversarial-specific fields -->
-          {% if item.judge_details.attack_type %}
-          <tr><th>Attack Type</th><td>{{ item.judge_details.attack_type }}</td></tr>
+          <!-- Unified Judge fields (Structure A) -->
+          {% if item.judge_details['attack_type'] %}
+          <tr><th>Attack Type</th><td>{{ item.judge_details['attack_type'] }}</td></tr>
           {% endif %}
-          {% if item.judge_details.subtype %}
-          <tr><th>Subtype</th><td>{{ item.judge_details.subtype }}</td></tr>
+          {% if item.judge_details['subtype'] %}
+          <tr><th>Subtype</th><td>{{ item.judge_details['subtype'] }}</td></tr>
           {% endif %}
-          {% if item.judge_details.compliance %}
-          <tr><th>Compliance</th><td>{{ item.judge_details.compliance }}</td></tr>
+          {% if item.judge_details['risk_level'] %}
+          <tr><th>Risk Level</th><td>{{ item.judge_details['risk_level'] }}</td></tr>
           {% endif %}
-          
-          <!-- Heuristic fields (patterns found) -->
-          {% if item.judge_details.patterns_found %}
-          <tr><th>Detected Keywords/Phrases</th><td>{{ item.judge_details.patterns_found | join(', ') }}</td></tr>
+          {% if item.judge_details['risk_reason'] %}
+          <tr><th>Risk Reason</th><td>{{ item.judge_details['risk_reason'] }}</td></tr>
           {% endif %}
           
-          <!-- Hallucination-specific fields -->
-          {% if item.judge_details.type %}
-          <tr><th>Hallucination Type</th><td>{{ item.judge_details.type }}</td></tr>
+          <!-- Hallucination-specific (Structure A) -->
+          {% if item.judge_details['type'] %}
+          <tr><th>Hallucination Type</th><td>{{ item.judge_details['type'] }}</td></tr>
           {% endif %}
-          {% if item.judge_details.source %}
-          <tr><th>Source</th><td>{{ item.judge_details.source }}</td></tr>
+          {% if item.judge_details['source'] %}
+          <tr><th>Source</th><td>{{ item.judge_details['source'] }}</td></tr>
+          {% endif %}
+          
+          <!-- Heuristic-specific (Structure B) -->
+          {% if item.judge_details['patterns_found'] %}
+          <tr><th>Detected Patterns</th><td>{{ item.judge_details['patterns_found'] | join(', ') }}</td></tr>
+          {% endif %}
+          {% if item.judge_details['category'] %}
+          <tr><th>Category</th><td>{{ item.judge_details['category'] }}</td></tr>
+          {% endif %}
+          {% if item.judge_details['subtypes'] %}
+          <tr><th>Subtypes</th><td>{{ item.judge_details['subtypes'] | join(', ') }}</td></tr>
+          {% endif %}
+          {% if item.judge_details['heuristic_only'] is defined %}
+          <tr><th>Evaluation Method</th><td>{{ "Heuristic Only" if item.judge_details['heuristic_only'] else "Heuristic + Judge" }}</td></tr>
           {% endif %}
         </table>
       </div>
@@ -87,15 +100,15 @@
       <div class="radio-group">
         <label>
           <input type="radio" name="assessment" value="yes" required/>
-          ✅ Yes
+          &#10004; Yes
         </label>
         <label>
           <input type="radio" name="assessment" value="no"/>
-          ❌ No
+          &#10006; No
         </label>
         <label>
           <input type="radio" name="assessment" value="partially"/>
-          ⚠ Partially Correct / Borderline
+          &#9888; Partially Correct / Borderline
         </label>
       </div>
 
@@ -105,15 +118,15 @@
       <div class="radio-group">
         <label>
           <input type="radio" name="agreement" value="agree" required/>
-          ✅ Agree
+          &#10004; Agree
         </label>
         <label>
           <input type="radio" name="agreement" value="disagree"/>
-          ❌ Disagree
+          &#10006; Disagree
         </label>
         <label>
           <input type="radio" name="agreement" value="partially_agree"/>
-          ⚠ Partially Agree
+          &#9888; Partially Agree
         </label>
       </div>
 
