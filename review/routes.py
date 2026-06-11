@@ -158,6 +158,11 @@ async def submit_review(
     token: str,
     decision: str = Form(...),
     notes: Optional[str] = Form(default=None),
+    # NEW FIELDS for enhanced review form
+    assessment: Optional[str] = Form(default=None),
+    agreement: Optional[str] = Form(default=None),
+    issues: Optional[str] = Form(default=None),
+    judge_error: Optional[str] = Form(default=None),
 ) -> HTMLResponse:
     """Accept a submitted review decision."""
     db_path = _db_path_for(project_name)
@@ -181,10 +186,29 @@ async def submit_review(
             status_code=400,
         )
 
+    # Parse issues from comma-separated string to list
+    issues_list = issues.split(",") if issues and issues.strip() else None
+
+    # Merge all extended data into single dict
+    evaluation_data = {
+        "assessment": assessment,
+        "agreement": agreement,
+        "issues": issues_list,
+        "judge_error": judge_error,
+    }
+
+    # Remove None values
+    evaluation_data = {k: v for k, v in evaluation_data.items() if v is not None}
+
     # Complete the queue item (token is single-use; rotated inside complete())
     try:
         with ReviewQueue(db_path=db_path, project=project_name) as q:
-            label = q.complete(token=token, decision=review_decision, notes=notes or None)
+            label = q.complete(
+                token=token,
+                decision=review_decision,
+                notes=notes or None,
+                evaluation_data=evaluation_data if evaluation_data else None,
+            )
     except ValueError as exc:
         return templates.TemplateResponse(
             "review_form.html",

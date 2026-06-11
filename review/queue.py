@@ -79,6 +79,7 @@ class ReviewQueue:
                 project_name     TEXT NOT NULL,
                 decision         TEXT NOT NULL,
                 notes            TEXT,
+                evaluation_data  TEXT,
                 created_at       TEXT NOT NULL,
                 FOREIGN KEY (queue_item_id) REFERENCES review_queue(id)
             );
@@ -159,6 +160,7 @@ class ReviewQueue:
         token: str,
         decision: ReviewDecision,
         notes: Optional[str] = None,
+        evaluation_data: Optional[Dict[str, Any]] = None,
     ) -> ReviewLabel:
         """
         Mark a pending queue item as completed, store the review label,
@@ -186,19 +188,23 @@ class ReviewQueue:
             (completed_at.isoformat(), generate_secure_token(), item.id),
         )
 
+        # Convert dict to JSON string
+        eval_data_json = json.dumps(evaluation_data) if evaluation_data else None
+
         label = ReviewLabel(
             id=str(uuid4()),
             queue_item_id=item.id,
             project_name=self.project,
             decision=decision,
             notes=notes,
+            evaluation_data=eval_data_json,
             created_at=completed_at,
         )
         cur.execute(
             """
             INSERT INTO review_labels
-                (id, queue_item_id, project_name, decision, notes, created_at)
-            VALUES (?,?,?,?,?,?)
+                (id, queue_item_id, project_name, decision, notes, evaluation_data, created_at)
+            VALUES (?,?,?,?,?,?,?)
             """,
             (
                 label.id,
@@ -206,6 +212,7 @@ class ReviewQueue:
                 label.project_name,
                 label.decision.value,
                 label.notes,
+                label.evaluation_data,
                 label.created_at.isoformat(),
             ),
         )

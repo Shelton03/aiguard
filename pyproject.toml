@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aiguard-safety"
-version = "0.8.2"
+version = "0.8.3"
 description = "AIGuard: model-agnostic safety evaluation toolkit with PDF reports (adversarial, evaluator, hallucination)"
 authors = [{ name = "Shelton Mutambirwa", email = "sheltonmutambirwa@gmail.com" }]
 readme = { file = "README.md", content-type = "text/markdown" }
@@ -12,7 +12,7 @@ requires-python = ">=3.10"
 dependencies = [
     "typer>=0.12.0",
     "pyyaml>=6.0",
-    "litellm[all]>=1.0",
+    "litellm>=1.0",
     "datasets>=2.16.0",
     "langdetect>=1.0.9",
     "reportlab>=4.0.0",

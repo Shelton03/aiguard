@@ -48,12 +48,6 @@ class PipelineConfig:
     review_sample_rate: float = 0.20
     """Probability of random sampling (0.0-1.0, default: 20%)"""
 
-    review_high_score_threshold: Optional[float] = None
-    """Trigger review if score >= this value (None = disabled)"""
-
-    review_low_score_threshold: Optional[float] = None
-    """Trigger review if score <= this value (None = disabled)"""
-
     review_adversarial_threshold: Optional[float] = None
     """Trigger adversarial review if score >= this value (None = disabled)"""
 
@@ -72,12 +66,6 @@ class PipelineConfig:
             raise ValueError("max_batch_size must be > 0")
         if not 0.0 <= self.review_sample_rate <= 1.0:
             raise ValueError("review_sample_rate must be between 0.0 and 1.0")
-        if (self.review_high_score_threshold is not None and
-                not 0.0 <= self.review_high_score_threshold <= 1.0):
-            raise ValueError("review_high_score_threshold must be between 0.0 and 1.0")
-        if (self.review_low_score_threshold is not None and
-                not 0.0 <= self.review_low_score_threshold <= 1.0):
-            raise ValueError("review_low_score_threshold must be between 0.0 and 1.0")
         if (self.review_adversarial_threshold is not None and
                 not 0.0 <= self.review_adversarial_threshold <= 1.0):
             raise ValueError("review_adversarial_threshold must be between 0.0 and 1.0")
@@ -124,8 +112,6 @@ def load_pipeline_config(
             review_section: Dict[str, Any] = pipeline_section.get("review", {}) or {}
             raw["enable_review_queue"] = review_section.get("enabled", False)
             raw["review_sample_rate"] = float(review_section.get("sample_rate", 0.20))
-            raw["review_high_score_threshold"] = review_section.get("high_score_threshold")
-            raw["review_low_score_threshold"] = review_section.get("low_score_threshold")
             raw["review_adversarial_threshold"] = review_section.get("adversarial_threshold")
             raw["review_hallucination_threshold"] = review_section.get("hallucination_threshold")
             raw["review_send_email"] = review_section.get("send_email", True)
@@ -163,8 +149,6 @@ def load_pipeline_config(
         judge=judge_config,
         enable_review_queue=raw.get("enable_review_queue", False),
         review_sample_rate=raw.get("review_sample_rate", 0.20),
-        review_high_score_threshold=raw.get("review_high_score_threshold"),
-        review_low_score_threshold=raw.get("review_low_score_threshold"),
         review_adversarial_threshold=raw.get("review_adversarial_threshold"),
         review_hallucination_threshold=raw.get("review_hallucination_threshold"),
         review_send_email=raw.get("review_send_email", True),

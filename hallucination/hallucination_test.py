@@ -70,7 +70,19 @@ class HallucinationTest:
         elif mode == HallucinationMode.CONTEXT_GROUNDED:
             bundle, reasoning = evaluate_against_context(response, test_case.get("context_documents", []))
         else:
-            bundle, reasoning = evaluate_self_consistency(response, target_lang=response_lang)
+            try:
+                bundle, reasoning = evaluate_self_consistency(response, target_lang=response_lang)
+            except Exception as e:
+                logger.warning("HallucinationTest: failed to evaluate self-consistency | error=%s", str(e))
+                bundle = ScoreBundle(
+                    factual_score=None,
+                    grounding_score=None,
+                    consistency_score=1.0,
+                    uncertainty_score=0.0,
+                    overall_risk=0.0,
+                    confidence=0.0
+                )
+                reasoning = "evaluation_failed: unable to analyze response consistency"
         reasoning_parts.append(reasoning)
 
         unc_bundle, unc_reason = estimate_uncertainty(response, target_lang=response_lang)

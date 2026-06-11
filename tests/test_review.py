@@ -262,8 +262,8 @@ def test_review_queue_disabled_by_default():
     config = PipelineConfig()
     assert config.enable_review_queue is False
     assert config.review_sample_rate == 0.20
-    assert config.review_high_score_threshold is None
-    assert config.review_low_score_threshold is None
+    assert config.review_adversarial_threshold is None
+    assert config.review_hallucination_threshold is None
     assert config.review_send_email is True
 
 
@@ -276,8 +276,8 @@ def test_should_trigger_random_sample():
     config = PipelineConfig(
         enable_review_queue=True,
         review_sample_rate=1.0,  # 100% for deterministic testing
-        review_high_score_threshold=None,
-        review_low_score_threshold=None,
+        review_adversarial_threshold=None,
+        review_hallucination_threshold=None,
     )
     worker = EvaluationWorker(config)
 
@@ -303,8 +303,8 @@ def test_should_trigger_random_sample():
     assert reason.startswith("random_sample")
 
 
-def test_high_score_threshold_none_disables():
-    """None threshold means disabled."""
+def test_module_thresholds_none_disables():
+    """None thresholds mean disabled for both modules."""
     from config.pipeline_config import PipelineConfig
     from pipeline.evaluation_worker import EvaluationWorker
     from pipeline.event_models import EvaluationBundle, ModuleEvaluationResult
@@ -312,8 +312,8 @@ def test_high_score_threshold_none_disables():
     config = PipelineConfig(
         enable_review_queue=True,
         review_sample_rate=0.0,  # Disable random
-        review_high_score_threshold=None,  # Disabled
-        review_low_score_threshold=None,
+        review_adversarial_threshold=None,  # Disabled
+        review_hallucination_threshold=None,
     )
     worker = EvaluationWorker(config)
 
@@ -321,7 +321,7 @@ def test_high_score_threshold_none_disables():
     event.trace_id = "test-trace"
     event.project_id = "test_project"
 
-    # High score (1.0) should NOT trigger when threshold is None
+    # High score (1.0) should NOT trigger when threshold is None for both modules
     bundle = EvaluationBundle(
         hallucination=ModuleEvaluationResult(
             label="hallucinated",
@@ -330,7 +330,15 @@ def test_high_score_threshold_none_disables():
             confidence=0.9,
             explanation="test",
             raw={},
-        )
+        ),
+        adversarial=ModuleEvaluationResult(
+            label="adversarial",
+            risk_level="high",
+            score=1.0,
+            confidence=0.9,
+            explanation="test",
+            raw={},
+        ),
     )
 
     should_trigger, reason = worker._should_trigger_review(event, bundle)
@@ -349,7 +357,6 @@ def test_should_trigger_high_score():
         enable_review_queue=True,
         review_sample_rate=0.0,
         review_hallucination_threshold=0.8,
-        review_low_score_threshold=None,
     )
     worker = EvaluationWorker(config)
 
@@ -408,6 +415,40 @@ def test_should_trigger_hallucination_threshold():
     assert "hallucination" in reason and "high_score" in reason
 
 
+def test_should_trigger_adversarial_threshold():
+    """Adversarial threshold triggers review."""
+    from config.pipeline_config import PipelineConfig
+    from pipeline.evaluation_worker import EvaluationWorker
+    from pipeline.event_models import EvaluationBundle, ModuleEvaluationResult
+
+    config = PipelineConfig(
+        enable_review_queue=True,
+        review_sample_rate=0.0,
+        review_adversarial_threshold=0.2,
+    )
+    worker = EvaluationWorker(config)
+
+    event = Mock()
+    event.trace_id = "test-trace"
+    event.project_id = "test_project"
+
+    bundle = EvaluationBundle(
+        adversarial=ModuleEvaluationResult(
+            label="adversarial",
+            risk_level="high",
+            score=0.25,  # Above threshold
+            confidence=0.9,
+            explanation="test",
+            raw={},
+        )
+    )
+
+    should_trigger, reason = worker._should_trigger_review(event, bundle)
+
+    assert should_trigger is True
+    assert "adversarial" in reason and "high_score" in reason
+
+
 def test_should_trigger_combined_reasons():
     """Multiple triggers combine reasons with comma separator."""
     from config.pipeline_config import PipelineConfig
@@ -418,7 +459,6 @@ def test_should_trigger_combined_reasons():
         enable_review_queue=True,
         review_sample_rate=1.0,  # Always triggers random
         review_hallucination_threshold=0.8,
-        review_low_score_threshold=None,
     )
     worker = EvaluationWorker(config)
 
@@ -725,8 +765,8 @@ pipeline:
         enable_review_queue=True,
         project_id="test_project",
         review_sample_rate=1.0,
-        review_high_score_threshold=None,
-        review_low_score_threshold=None,
+        review_adversarial_threshold=None,
+        review_hallucination_threshold=None,
     )
     worker = EvaluationWorker(config=config, storage_root=tmp_path)
     

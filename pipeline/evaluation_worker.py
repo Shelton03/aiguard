@@ -69,6 +69,22 @@ def _risk_label(overall_risk: float) -> str:
     return "hallucinated" if overall_risk > _RISK_LABEL_THRESHOLD else "safe"
 
 
+def _risk_level(overall_risk: float) -> str:
+    """Convert numeric risk score to categorical level (Low/Medium/High).
+    
+    Ranges:
+      - Low: 0.0 - 0.4
+      - Medium: 0.4 - 0.7
+      - High: 0.7 - 1.0
+    """
+    if overall_risk <= 0.4:
+        return "Low"
+    elif overall_risk <= 0.7:
+        return "Medium"
+    else:
+        return "High"
+
+
 def _prompt_from_messages(messages: list) -> str:
     """Extract a plain-text prompt string from a list of message dicts.
     
@@ -383,14 +399,20 @@ class EvaluationWorker:
             "metadata": event.metadata or {},
         }
 
-        result = self._hallucination_test.evaluate(test_case, trace_dict)
+        try:
+            result = self._hallucination_test.evaluate(test_case, trace_dict)
+        except Exception as e:
+            logger.warning("EvaluationWorker: skipped trace %s (hallucination) — body empty or incomplete. Error: %s", 
+                           event.trace_id, str(e))
+            return None
+        
         overall_risk = result.scores.get("overall_risk", 0.0) or 0.0
         label = _risk_label(float(overall_risk))
 
         return ModuleEvaluationResult(
             label=label,
             score=float(overall_risk),
-            risk_level=_risk_label(float(overall_risk)),
+            risk_level=_risk_level(float(overall_risk)),
             confidence=float(result.confidence),
             explanation=result.reasoning or "",
             raw=result.to_dict(),
@@ -834,12 +856,14 @@ class EvaluationWorker:
                     logger.info("ADVERSARIAL: Judge returned None, using heuristic-only result")
             except Exception as e:
                 # Judge failed, fallback to heuristic-only
-                logger.info("ADVERSARIAL: Judge evaluation failed | error=%s, using heuristic-only result", str(e))
+                logger.warning("EvaluationWorker: skipped trace %s (adversarial) — evaluation failed. Error: %s", 
+                               event.trace_id, str(e))
+                # Use heuristic-only result
 
         return ModuleEvaluationResult(
             label=label,
             score=score,
-            risk_level=_risk_label(score),
+            risk_level=_risk_level(score),
             confidence=confidence,
             explanation=explanation,
             raw=raw,

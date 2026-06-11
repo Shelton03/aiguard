@@ -32,7 +32,7 @@
         <div class="stat-label">Completed</div>
       </div>
       <div class="stat-card">
-        <div class="stat-num">{{ cal_state.scale_factor | round(4) }}</div>
+        <div class="stat-num">{{ cal_state.scale_factor | round(4) if cal_state.scale_factor is not none else '-' }}</div>
         <div class="stat-label">Scale Factor</div>
       </div>
       <div class="stat-card">
@@ -64,10 +64,10 @@
           <tr>
             <td class="mono">{{ item.id[:8] }}…</td>
             <td>{{ item.module_type }}</td>
-            <td>{{ item.raw_score | round(4) }}</td>
-            <td>{{ item.calibrated_score | round(4) }}</td>
+            <td>{{ item.raw_score | round(4) if item.raw_score is not none else '-' }}</td>
+            <td>{{ item.calibrated_score | round(4) if item.calibrated_score is not none else '-' }}</td>
             <td>{{ item.trigger_reason }}</td>
-            <td class="mono">{{ item.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+            <td class="mono">{{ item.created_at.strftime('%Y-%m-%d %H:%M') if item.created_at else '-' }}</td>
           </tr>
           {% endfor %}
         </tbody>
@@ -108,9 +108,9 @@
     {% endif %}
   </main>
 
-  <footer>
-    Last calibration: {{ cal_state.last_calibration_at.strftime('%Y-%m-%d') }}
-    &nbsp;|&nbsp; AIGuard v{{ version }}
-  </footer>
+      <footer>
+        Last calibration: {{ cal_state.last_calibration_at.strftime('%Y-%m-%d') if cal_state.last_calibration_at else '-' }}
+        &nbsp;|&nbsp; AIGuard v{{ version }}
+      </footer>
 </body>
 </html>

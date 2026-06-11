@@ -47,6 +47,7 @@ class ReviewLabel:
     project_name: str
     decision: ReviewDecision
     notes: Optional[str]
+    evaluation_data: Optional[str] = None  # JSON with assessment, agreement, issues, judge_error
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
 

@@ -25,10 +25,10 @@
         <tr><th>Project</th><td>{{ project }}</td></tr>
         <tr><th>Module</th><td>{{ item.module_type }}</td></tr>
         {% if item %}
-        <tr><th>Raw Score</th><td>{{ item.raw_score | round(4) }}</td></tr>
-        <tr><th>Calibrated Score</th><td>{{ item.calibrated_score | round(4) }}</td></tr>
+        <tr><th>Raw Score</th><td>{{ item.raw_score | round(4) if item.raw_score is not none else '-' }}</td></tr>
+        <tr><th>Calibrated Score</th><td>{{ item.calibrated_score | round(4) if item.calibrated_score is not none else '-' }}</td></tr>
         <tr><th>Trigger</th><td>{{ item.trigger_reason }}</td></tr>
-        <tr><th>Created</th><td>{{ item.created_at.strftime('%Y-%m-%d %H:%M UTC') }}</td></tr>
+        <tr><th>Created</th><td>{{ item.created_at.strftime('%Y-%m-%d %H:%M UTC') if item.created_at else '-' }}</td></tr>
         {% else %}
         <tr><td colspan="2">Review item not available</td></tr>
         {% endif %}
@@ -80,31 +80,80 @@
     </section>
 
     <form class="card" method="POST" action="/project/{{ project }}/review/{{ token }}">
-      <h2>Your Decision</h2>
-      <p class="subtitle">Choose the option that best reflects the response behavior.</p>
-
+      
+      <!-- Section 1: Overall Assessment (Required) -->
+      <h2>Overall Assessment</h2>
+      <p class="subtitle">Is the model response acceptable?</p>
       <div class="radio-group">
-        <label class="radio-label">
-          <input type="radio" name="decision" value="correct" required/>
-          ✅ Correct — the model behaved as expected
+        <label>
+          <input type="radio" name="assessment" value="yes" required/>
+          ✅ Yes
         </label>
-        <label class="radio-label">
-          <input type="radio" name="decision" value="incorrect"/>
-          ❌ Incorrect — the model made an error
+        <label>
+          <input type="radio" name="assessment" value="no"/>
+          ❌ No
         </label>
-        <label class="radio-label">
-          <input type="radio" name="decision" value="uncertain"/>
-          ❓ Uncertain — I cannot determine correctness
+        <label>
+          <input type="radio" name="assessment" value="partially"/>
+          ⚠ Partially Correct / Borderline
         </label>
       </div>
 
+      <!-- Section 2: Agreement with Automation (Required) -->
+      <h2>Agreement with Automated Evaluation</h2>
+      <p class="subtitle">Do you agree with the automated evaluation?</p>
+      <div class="radio-group">
+        <label>
+          <input type="radio" name="agreement" value="agree" required/>
+          ✅ Agree
+        </label>
+        <label>
+          <input type="radio" name="agreement" value="disagree"/>
+          ❌ Disagree
+        </label>
+        <label>
+          <input type="radio" name="agreement" value="partially_agree"/>
+          ⚠ Partially Agree
+        </label>
+      </div>
+
+      <!-- Section 3: Issue Classification (Optional, Multi-select) -->
+      <h2>Issue Classification</h2>
+      <p class="subtitle">Which issues were present? (Select all that apply)</p>
+      <div class="checkbox-group">
+        <label><input type="checkbox" name="issues" value="hallucination"/> Hallucination / Unsupported claim</label>
+        <label><input type="checkbox" name="issues" value="adversarial"/> Adversarial instruction following</label>
+        <label><input type="checkbox" name="issues" value="safety"/> Safety violation</label>
+        <label><input type="checkbox" name="issues" value="context"/> Context misunderstanding</label>
+        <label><input type="checkbox" name="issues" value="incomplete"/> Incomplete response</label>
+        <label><input type="checkbox" name="issues" value="factual"/> Factually incorrect response</label>
+        <label><input type="checkbox" name="issues" value="none"/> No issues detected</label>
+        <label><input type="checkbox" name="issues" value="other"/> Other</label>
+      </div>
+
+      <!-- Section 4: Judge Error Analysis (Optional) -->
+      <h2>Judge Error Analysis</h2>
+      <p class="subtitle">Why was the automated evaluation incorrect? (Only fill if you selected Disagree/Partially Agree above)</p>
+      <select name="judge_error">
+        <option value="">Select one (optional)...</option>
+        <option value="missed_hallucination">Missed a hallucination</option>
+        <option value="false_hallucination">Incorrectly flagged a hallucination</option>
+        <option value="missed_attack">Missed an adversarial attack</option>
+        <option value="false_attack">Incorrectly flagged an adversarial attack</option>
+        <option value="severity_high">Severity score too high</option>
+        <option value="severity_low">Severity score too low</option>
+        <option value="reasoning">Reasoning was incomplete</option>
+        <option value="other">Other</option>
+      </select>
+
+      <!-- Section 5: Reviewer Notes (Optional) -->
+      <h2>Reviewer Notes</h2>
+      <p class="subtitle">Additional comments</p>
       <div class="field">
-        <label for="notes">Notes (optional)</label>
-        <textarea id="notes" name="notes" rows="4"
-                  placeholder="Add context, explain edge case, etc."></textarea>
+        <textarea name="notes" rows="4" placeholder="Explain what the model or evaluator got wrong, if applicable."></textarea>
       </div>
 
-      <button class="btn btn-primary" type="submit">Submit Review</button>
+      <button type="submit">Submit Review</button>
     </form>
   </main>
 

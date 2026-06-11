@@ -11,6 +11,8 @@ from adversarial.language_detection import detect_language
 
 
 def _detect_internal_contradiction(text: str, cues_positive: list, cues_negative: list) -> bool:
+    if not text:
+        return False
     text_l = text.lower()
     return any(neg in text_l and pos in text_l for neg in cues_negative for pos in cues_positive)
 

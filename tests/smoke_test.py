@@ -108,7 +108,8 @@ class TestStorageModels(unittest.TestCase):
             execution_mode="evaluation",
             scores={"overall_risk": 0.1},
             category="faithfulness/context_inconsistency",
-            risk_level="safe",
+            label="safe",
+            risk_level="Low",
             confidence=0.9,
             created_at=datetime.now(timezone.utc),
         )

@@ -30,7 +30,7 @@ class TestIssue1_MissingRiskLevel:
         
         assert result is not None
         assert hasattr(result, 'risk_level'), "risk_level should be present in result"
-        assert result.risk_level in ["safe", "none", "low", "medium", "high"], f"Invalid risk_level: {result.risk_level}"
+        assert result.risk_level in ["Low", "Medium", "High"], f"Invalid risk_level: {result.risk_level}"
     
     def test_risk_level_in_adversarial_without_judge(self, tmp_path: Path):
         """Verify _run_adversarial returns risk_level when judge disabled."""
@@ -54,7 +54,7 @@ class TestIssue1_MissingRiskLevel:
         
         assert result is not None
         assert hasattr(result, 'risk_level'), "risk_level should be present in result"
-        assert result.risk_level in ["safe", "none", "low", "medium", "high"], f"Invalid risk_level: {result.risk_level}"
+        assert result.risk_level in ["Low", "Medium", "High"], f"Invalid risk_level: {result.risk_level}"
 
 
 class TestIssue2_UndefinedTemplateError:

@@ -278,8 +278,8 @@ pipeline:
     review:
         enabled: false           # Set to true to enable auto-trigger
         sample_rate: 0.20         # 20% random sampling (0.0-1.0)
-        high_score_threshold: null  # Review scores >= this (null = disabled)
-        low_score_threshold: null   # Review scores <= this (null = disabled)
+        adversarial_threshold: null  # Trigger review if adversarial score >= this (null = disabled)
+        hallucination_threshold: null  # Trigger review if hallucination score >= this (null = disabled)
         send_email: true          # Send email notifications to reviewers
 
 storage: sqlite
